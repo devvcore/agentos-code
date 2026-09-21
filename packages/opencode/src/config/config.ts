@@ -36,6 +36,7 @@ import { ConfigVariable } from "./variable"
 import { ConfigV2Compat } from "./v2-compat"
 import { Npm } from "@opencode-ai/core/npm"
 import { withTransientReadRetry } from "@/util/effect-http-client"
+import { applyAccountConfig } from "../agentos/config"
 
 // Custom merge function that concatenates array fields instead of replacing them
 // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
@@ -595,6 +596,13 @@ const layer = Layer.effect(
         }
         if (Flag.OPENCODE_DISABLE_PRUNE) {
           result.compaction = { ...result.compaction, prune: false }
+        }
+
+        if (process.env.AGENTOS_CODE === "1" && process.env.AGENTOS_CODE_CONFIG) {
+          const account = yield* loadConfig(process.env.AGENTOS_CODE_CONFIG, {
+            dir: ctx.directory, source: "AgentOS account",
+          })
+          result = applyAccountConfig(result, account)
         }
 
         return {

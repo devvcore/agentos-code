@@ -17,6 +17,9 @@ import { Script } from "@opencode-ai/script"
 import pkg from "../package.json"
 
 const singleFlag = process.argv.includes("--single")
+const agentosFlag = process.argv.includes("--agentos")
+const product = agentosFlag ? "agentos-code" : pkg.name
+const executable = agentosFlag ? "agentos-code" : "opencode"
 const baselineFlag = process.argv.includes("--baseline")
 const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
@@ -144,7 +147,7 @@ if (!skipInstall) {
 }
 for (const item of targets) {
   const name = [
-    pkg.name,
+    product,
     // changing to win32 flags npm for some reason
     item.os === "win32" ? "windows" : item.os,
     item.arch,
@@ -174,8 +177,8 @@ for (const item of targets) {
       autoloadDotenv: false,
       autoloadTsconfig: true,
       autoloadPackageJson: true,
-      target: name.replace(pkg.name, "bun") as any,
-      outfile: `dist/${name}/bin/opencode`,
+      target: name.replace(product, "bun") as any,
+      outfile: `dist/${name}/bin/${executable}`,
       execArgv: [`--user-agent=opencode/${Script.version}`, "--use-system-ca", "--"],
       windows: {},
     },
@@ -184,7 +187,7 @@ for (const item of targets) {
       ...(embeddedFileMap ? { "opencode-web-ui.gen.ts": embeddedFileMap } : {}),
     },
     entrypoints: [
-      "./src/index.ts",
+      agentosFlag ? "./src/agentos.ts" : "./src/index.ts",
       workerPath,
       treeSitterWorkerPath,
       ...(embeddedFileMap ? ["opencode-web-ui.gen.ts"] : []),
@@ -203,7 +206,7 @@ for (const item of targets) {
 
   // Smoke test: only run if binary is for current platform
   if (item.os === process.platform && item.arch === process.arch && !item.abi) {
-    const binaryPath = `dist/${name}/bin/opencode`
+    const binaryPath = `dist/${name}/bin/${executable}`
     console.log(`Running smoke test: ${binaryPath} --version`)
     try {
       const versionOutput = await $`${binaryPath} --version`.text()

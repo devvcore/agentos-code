@@ -13,6 +13,8 @@
     "profile:test": "bun run script/profile-test-files.ts",
     "build": "bun run script/build.ts",
     "dev": "bun run ./src/index.ts",
+    "agentos": "bun run ./src/agentos.ts",
+    "build:agentos": "bun run script/build.ts --agentos",
     "dev:temporary": "bun run ./src/temporary.ts"
   },
   "bin": {

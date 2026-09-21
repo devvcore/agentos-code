@@ -1,3 +1,71 @@
+# AgentOS Code
+
+A fork of [OpenCode](https://github.com/anomalyco/opencode) for coding in AgentOS and your terminal. Sign in with your AgentOS account; coding uses the same workspace credits and Usage ledger. Provider API keys stay on the AgentOS server.
+
+## Install from source
+
+Requires Git and Bun 1.3.14. On macOS or Linux:
+
+```sh
+git clone https://github.com/devvcore/agentos-code.git
+cd agentos-code
+./script/install-agentos.sh
+export PATH="$HOME/.local/bin:$PATH"
+agentos-code login
+cd /path/to/your/project
+agentos-code
+```
+
+The installer builds the native binary for this computer. There is no published npm package or automatic updater yet. Windows can build with `bun run build:agentos --single --skip-install --skip-embed-web-ui` from `packages/opencode` after installing dependencies.
+
+```sh
+agentos-code run "Fix the failing tests"
+agentos-code models
+AGENTOS_MODEL=openai/gpt-5.6-luna agentos-code
+agentos-code usage
+agentos-code whoami --json
+agentos-code logout
+```
+
+`login` opens the existing AgentOS sign-in and workspace consent flow with PKCE. The workspace approved there owns the usage. `logout` revokes the grant and removes the local credential; `logout --local` only removes the local file. To change workspace, sign out and sign in again, choosing it at consent.
+
+Use `login --url https://your-agentos.example/api` for a self-hosted server, or `--no-browser` to open the printed link manually on the same computer. Headless runs accept `AGENTOS_API_TOKEN` and `AGENTOS_URL`. Local development also supports `http://127.0.0.1:PORT` directly or an explicit `/api` proxy prefix.
+
+## AgentOS integration
+
+The server must include the AgentOS Code integration: `GET /inference/v1/account`, the capability-rich model catalog, and the `agentos_code` engine. Existing AgentOS servers without this update return an actionable upgrade error. Deployment is a separate release step.
+
+In AgentOS, create an Agent, open Advanced, and choose **AgentOS Code** as its framework. It uses the regular model picker and workspace credits, with no separate provider connection. The backend creates a scoped, revocable token bound to that agent; its model cannot be overridden by the CLI.
+
+Operators install the Linux binary in the execution environment and set `AGENTOS_CODE_CLI` to its absolute path. For existing sandbox execution, install it in the sandbox image and set `AGENTOS_CODE_SANDBOX_CLI` and a reachable HTTPS `AGENTOS_SELF_URL`. Availability is disabled when no runtime is installed. See the AgentOS repository's `docs/AGENTOS_CODE.md` for rollout and verification.
+
+## Account and permissions
+
+- All built-in model requests, including helper generations, use AgentOS inference and its existing credit ledger. Workspace tools use the same account through AgentOS MCP.
+- Project configuration cannot replace the AgentOS provider endpoint or the AgentOS MCP credential target. Other local tools and MCP servers retain OpenCode's permission controls.
+- Credentials are stored with mode 0600 in `~/.config/agentos-code/auth.json` (or the XDG config directory). Data, sessions, and caches use separate `agentos-code` paths. `AGENTOS_CODE_HOME` overrides only the credential directory.
+- Sharing, upstream auto-updates, external plugins, and debug config dumps are disabled in AgentOS mode. Local coding tools still have access to the files and commands you approve; run untrusted projects in a sandbox.
+- `serve` requires `OPENCODE_SERVER_PASSWORD`. Use the local CLI or the AgentOS engine for the supported flows; the upstream desktop and web applications are not rebranded releases of AgentOS Code.
+
+## Development and verification
+
+```sh
+bun install --frozen-lockfile --ignore-scripts
+cd packages/opencode
+bun run agentos --help
+bun test test/agentos
+bun run typecheck
+OPENCODE_CHANNEL=agentos OPENCODE_VERSION=0.1.0 bun run build:agentos --single --skip-install --skip-embed-web-ui
+```
+
+The AgentOS integration suite exercises the real compiled CLI, file tools, session resume, token binding and ledger settlement against a controlled model response. Live provider and production deployment checks remain separate.
+
+## Upstream
+
+MIT licensed; original notices remain in [LICENSE](LICENSE). The upstream command and packages remain available for development. The original README follows.
+
+---
+
 <p align="center">
   <a href="https://opencode.ai">
     <picture>
