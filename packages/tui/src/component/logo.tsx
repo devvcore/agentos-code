@@ -1,13 +1,11 @@
 import { RGBA, TextAttributes } from "@opentui/core"
 import { For, type JSX } from "solid-js"
 import { tint, useTheme } from "../context/theme"
-import { logo } from "../logo"
+import { logo as upstream, omni } from "../logo"
 
 export function Logo() {
   const { theme } = useTheme()
-  if (process.env.AGENTOS_CODE === "1") {
-    return <box height={4} justifyContent="center"><text fg={theme.text} attributes={TextAttributes.BOLD}>omnicode</text></box>
-  }
+  const logo = process.env.AGENTOS_CODE === "1" ? omni : upstream
 
   const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {
     const shadow = tint(theme.background, fg, 0.25)

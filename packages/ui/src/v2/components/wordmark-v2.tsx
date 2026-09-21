@@ -1,4 +1,5 @@
 import { createUniqueId, type ComponentProps } from "solid-js"
+import { OmniWordmarkPaths } from "../../components/omni-wordmark"
 
 export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
   const mask = createUniqueId()
@@ -15,18 +16,9 @@ export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
         <g mask={`url(#${mask})`}>
           <g opacity="0.16">
             {import.meta.env.VITE_AGENTOS_CODE === "1" ? (
-              <text
-                x="360"
-                y="110"
-                text-anchor="middle"
-                font-family="Inter, sans-serif"
-                font-size="136"
-                font-weight="600"
-                fill="currentColor"
-                opacity="0.7"
-              >
-                omnicode
-              </text>
+              <g transform="scale(18.461538)" opacity="0.7">
+                <OmniWordmarkPaths />
+              </g>
             ) : (
               <>
                 <path
