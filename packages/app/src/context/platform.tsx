@@ -29,6 +29,10 @@ export type FatalRendererErrorLog = {
 }
 
 type PlatformBase = {
+  agentos?: {
+    account: () => Promise<import("../agentos").AgentOSAccount>
+    logout: () => Promise<void>
+  }
   /** App version */
   version?: string
 

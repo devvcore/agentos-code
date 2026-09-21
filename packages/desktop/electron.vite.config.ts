@@ -3,6 +3,7 @@ import { defineConfig } from "electron-vite"
 import appPlugin from "@opencode-ai/app/vite"
 import * as fs from "node:fs/promises"
 
+const agentos = process.env.AGENTOS_CODE === "1"
 const OPENCODE_SERVER_DIST = "../opencode/dist/node"
 
 const channel = (() => {
@@ -15,7 +16,7 @@ const channel = (() => {
 const nodePtyPkg = `@lydell/node-pty-${process.platform}-${process.arch}`
 
 const sentry =
-  process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
+  !agentos && process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT
     ? sentryVitePlugin({
         authToken: process.env.SENTRY_AUTH_TOKEN,
         org: process.env.SENTRY_ORG,
@@ -35,10 +36,13 @@ export default defineConfig({
   main: {
     define: {
       "import.meta.env.OPENCODE_CHANNEL": JSON.stringify(channel),
+      "import.meta.env.AGENTOS_CODE": JSON.stringify(agentos ? "1" : "0"),
     },
     build: {
       rollupOptions: {
-        input: { index: "src/main/index.ts", sidecar: "src/main/sidecar.ts" },
+        input: agentos
+          ? { index: "src/main/index.ts" }
+          : { index: "src/main/index.ts", sidecar: "src/main/sidecar.ts" },
         // Keep this identical to electron-vite's Node 20.11+ shim. Its regex insertion can
         // corrupt bundled TypeScript, while a Rollup banner places the shim safely.
         output: {
@@ -71,6 +75,7 @@ const require = __cjs_mod__.createRequire(import.meta.url);
       {
         name: "opencode:copy-server-assets",
         async writeBundle() {
+          if (agentos) return
           for (const l of await fs.readdir(OPENCODE_SERVER_DIST)) {
             if (!l.endsWith(".wasm")) continue
             await fs.writeFile(`./out/main/chunks/${l}`, await fs.readFile(`${OPENCODE_SERVER_DIST}/${l}`))
@@ -91,7 +96,19 @@ const require = __cjs_mod__.createRequire(import.meta.url);
     },
   },
   renderer: {
-    plugins: [appPlugin, sentry],
+    define: {
+      "import.meta.env.VITE_AGENTOS_CODE": JSON.stringify(agentos ? "1" : "0"),
+      "import.meta.env.VITE_AGENTOS_VERSION": JSON.stringify(process.env.AGENTOS_VERSION ?? "0.2.0"),
+    },
+    plugins: [
+      appPlugin,
+      sentry,
+      {
+        name: "agentos:title",
+        transformIndexHtml: (html) =>
+          agentos ? html.replace("<title>OpenCode</title>", "<title>AgentOS Code</title>") : html,
+      },
+    ],
     publicDir: "../../../app/public",
     root: "src/renderer",
     build: {

@@ -189,10 +189,16 @@ export const { use: useLanguage, provider: LanguageProvider } = createSimpleCont
       initialValue: dicts.get(initial) ?? base,
     })
 
-    const t = i18n.translator(() => dict() ?? base, i18n.resolveTemplate) as (
+    const translate = i18n.translator(() => dict() ?? base, i18n.resolveTemplate) as (
       key: keyof Dictionary,
       params?: Record<string, string | number | boolean>,
     ) => string
+    const t: typeof translate = (key, params) => {
+      if (import.meta.env.VITE_AGENTOS_CODE !== "1") return translate(key, params)
+      if (key === "command.provider.connect" || key === "settings.providers.title")
+        return translate("agentos.account.title", params)
+      return translate(key, params).replaceAll("OpenCode", "AgentOS Code")
+    }
 
     const plural = (key: PluralKey, count: number, params?: Record<string, string | number | boolean>) => {
       const category = pluralCategory(intl(), count)

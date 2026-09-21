@@ -6,6 +6,8 @@ import {
   type DesktopNativeKey,
 } from "@opencode-ai/app/i18n/desktop-native"
 
+import { AGENTOS_CODE } from "./constants"
+
 let bundle: DesktopNativeBundle = { locale: "en", messages: { ...DESKTOP_NATIVE_ENGLISH } }
 
 export function setNativeTranslations(next: DesktopNativeBundle) {
@@ -20,5 +22,6 @@ export function setNativeTranslations(next: DesktopNativeBundle) {
 }
 
 export function nativeT(key: DesktopNativeKey, params?: Record<string, string | number>) {
-  return formatDesktopNativeMessage(bundle.messages[key], params)
+  const message = AGENTOS_CODE ? bundle.messages[key].replaceAll("OpenCode", "AgentOS Code") : bundle.messages[key]
+  return formatDesktopNativeMessage(message, params)
 }

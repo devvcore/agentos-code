@@ -13,7 +13,7 @@ import contextMenu from "electron-context-menu"
 
 import type { ServerReadyData } from "../preload/types"
 import { checkAppExists, resolveAppPath } from "./apps"
-import { CHANNEL } from "./constants"
+import { AGENTOS_CODE, CHANNEL } from "./constants"
 import { registerIpcHandlers, sendDeepLinks, sendMenuCommand } from "./ipc"
 import { forwardInitializationFailure } from "./initialization"
 import { exportDebugLogs, initCrashReporter, initLogging, startNetLog, write as writeLog } from "./logging"
@@ -25,6 +25,7 @@ import {
   isOldLayoutEligible,
 } from "./onboarding"
 import {
+  checkHealth,
   getDefaultServerUrl,
   preferAppEnv,
   setDefaultServerUrl,
@@ -50,6 +51,15 @@ import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { setNativeTranslations } from "./native-translations"
 
+import { readAgentOSAccount, revokeAgentOSAccount, startAgentOSRuntime } from "./agentos-runtime"
+import type { AgentOSStartup } from "@opencode-ai/app/agentos"
+
+const agentosBinary = join(
+  app.isPackaged ? process.resourcesPath : join(import.meta.dirname, "../../resources"),
+  "agentos-code",
+)
+let agentosStartup: AgentOSStartup = { state: "starting" }
+
 const APP_NAMES: Record<string, string> = {
   dev: "OpenCode Dev",
   beta: "OpenCode Beta",
@@ -61,7 +71,7 @@ const APP_IDS: Record<string, string> = {
   prod: "ai.opencode.desktop",
 }
 const TEST_ONBOARDING = process.env.OPENCODE_TEST_ONBOARDING === "1"
-const SIDECAR_VERSION = process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"
+const SIDECAR_VERSION = !AGENTOS_CODE && process.env.OPENCODE_SIDECAR_V2 === "1" ? "v2" : "v1"
 const jsCallStackFeature = "DocumentPolicyIncludeJSCallStacksInCrashReports"
 
 let logger: ReturnType<typeof initLogging>
@@ -122,7 +132,7 @@ const main = Effect.gen(function* () {
 
   process.env.OPENCODE_DISABLE_EMBEDDED_WEB_UI = "true"
 
-  const appId = app.isPackaged ? APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
+  const appId = AGENTOS_CODE ? "net.tryagentos.code" : app.isPackaged ? APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
   const onboardingTestRoot = ((): string | undefined => {
     if (!TEST_ONBOARDING) return
 
@@ -138,7 +148,7 @@ const main = Effect.gen(function* () {
     process.env.XDG_STATE_HOME = join(root, "state")
     return root
   })()
-  app.setName(app.isPackaged ? APP_NAMES[CHANNEL] : "OpenCode Dev")
+  app.setName(AGENTOS_CODE ? "AgentOS Code" : app.isPackaged ? APP_NAMES[CHANNEL] : "OpenCode Dev")
   app.setAppUserModelId(appId)
   app.setPath(
     "userData",
@@ -203,7 +213,7 @@ const main = Effect.gen(function* () {
   const shellEnv = preferAppEnv(app.getPath("userData"))
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
-    const urls = argv.filter((arg: string) => arg.startsWith("opencode://"))
+    const urls = argv.filter((arg: string) => arg.startsWith(AGENTOS_CODE ? "agentos-code://" : "opencode://"))
     if (urls.length) {
       logger.log("deep link received via second-instance", { urls })
       emitDeepLinks(urls)
@@ -254,7 +264,7 @@ const main = Effect.gen(function* () {
 
   yield* Effect.promise(() => app.whenReady())
 
-  if (!TEST_ONBOARDING) migrate()
+  if (!TEST_ONBOARDING && !AGENTOS_CODE) migrate()
   yield* Effect.promise(() => cleanupStoreFiles(app.getPath("userData"))).pipe(
     Effect.tap((result) =>
       Effect.sync(() => {
@@ -268,7 +278,7 @@ const main = Effect.gen(function* () {
       }),
     ),
   )
-  app.setAsDefaultProtocolClient("opencode")
+  app.setAsDefaultProtocolClient(AGENTOS_CODE ? "agentos-code" : "opencode")
   registerRendererProtocol()
   setDockIcon()
   const updater = setupAutoUpdater(stopSidecars)
@@ -281,6 +291,17 @@ const main = Effect.gen(function* () {
     relaunch,
   }
   registerIpcHandlers({
+    agentos: AGENTOS_CODE
+      ? {
+          startup: () => agentosStartup,
+          account: () => readAgentOSAccount(agentosBinary),
+          logout: async () => {
+            await revokeAgentOSAccount(agentosBinary)
+            await killSidecar()
+            app.quit()
+          },
+        }
+      : undefined,
     killSidecar: () => killSidecar(),
     relaunch,
     awaitInitialization: Effect.fnUntraced(
@@ -293,9 +314,11 @@ const main = Effect.gen(function* () {
       (e) => Effect.runPromise(e),
     ),
     consumeInitialDeepLinks: () => pendingDeepLinks.splice(0),
-    getDefaultServerUrl: () => getDefaultServerUrl(),
-    setDefaultServerUrl: (url) => setDefaultServerUrl(url),
-    isFirstLaunchOnboardingPending,
+    getDefaultServerUrl: () => (AGENTOS_CODE ? null : getDefaultServerUrl()),
+    setDefaultServerUrl: (url) => {
+      if (!AGENTOS_CODE) setDefaultServerUrl(url)
+    },
+    isFirstLaunchOnboardingPending: () => !AGENTOS_CODE && isFirstLaunchOnboardingPending(),
     finishFirstLaunchOnboarding,
     isOldLayoutEligible,
     getDisplayBackend: async () => null,
@@ -311,7 +334,7 @@ const main = Effect.gen(function* () {
       if (setNativeTranslations(bundle)) createMenu(menuDeps)
     },
   })
-  registerWslIpcHandlers(wslServers)
+  if (!AGENTOS_CODE) registerWslIpcHandlers(wslServers)
   void updater.start()
   const updateTimer = setInterval(() => void updater.check(), 10 * 60 * 1000)
   updateTimer.unref()
@@ -376,21 +399,34 @@ const main = Effect.gen(function* () {
 
     logger.log("spawning sidecar", { url })
     const { listener, health } = yield* Effect.promise(() =>
-      spawnLocalServer(hostname, port, password, {
-        userDataPath: app.getPath("userData"),
-        onStdout: (message) => writeLog("server", "stdout", { message }),
-        onStderr: (message) => writeLog("server", "stderr", { message }, "warn"),
-        onExit: (code) => writeLog("utility", "sidecar exited", { code }, "warn"),
-      }),
+      Promise.resolve(
+        AGENTOS_CODE
+          ? startAgentOSRuntime({
+              binary: agentosBinary,
+              port,
+              password,
+              checkHealth,
+              onState: (state) => {
+                agentosStartup = state
+              },
+            })
+          : spawnLocalServer(hostname, port, password, {
+              userDataPath: app.getPath("userData"),
+              onStdout: (message) => writeLog("server", "stdout", { message }),
+              onStderr: (message) => writeLog("server", "stderr", { message }, "warn"),
+              onExit: (code) => writeLog("utility", "sidecar exited", { code }, "warn"),
+            }),
+      ),
     )
     server = listener
+    if (AGENTOS_CODE) yield* Effect.promise(() => health.wait)
     yield* Deferred.succeed(serverReady, {
       url,
       username: "opencode",
       password,
     })
 
-    if (process.platform === "win32") {
+    if (!AGENTOS_CODE && process.platform === "win32") {
       void wslServers.initialize().catch((error) => logger.error("wsl server initialization failed", error))
     }
 
@@ -406,7 +442,7 @@ const main = Effect.gen(function* () {
     logger.log("loading task finished")
   }).pipe(forwardInitializationFailure(serverReady), Effect.forkChild)
 
-  yield* Fiber.await(loadingTask)
+  if (!AGENTOS_CODE) yield* Fiber.await(loadingTask)
 
   app.on("window-all-closed", () => {
     if (process.platform === "darwin") return
@@ -419,6 +455,7 @@ const main = Effect.gen(function* () {
 
   const windows = restoreMainWindows()
   if (windows.length) createMenu(menuDeps)
+  if (AGENTOS_CODE) yield* Fiber.await(loadingTask)
 })
 
 Effect.runFork(main)

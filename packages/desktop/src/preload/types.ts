@@ -1,3 +1,4 @@
+import type { AgentOSAccount, AgentOSStartup } from "@opencode-ai/app/agentos"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
 import type { WslServersPlatform } from "@opencode-ai/app/wsl/types"
 import type { UpdaterState } from "@opencode-ai/app/updater"
@@ -43,6 +44,11 @@ export type FatalRendererError = {
 }
 
 export type ElectronAPI = {
+  agentos: {
+    startup: () => Promise<AgentOSStartup>
+    account: () => Promise<AgentOSAccount>
+    logout: () => Promise<void>
+  }
   killSidecar: () => Promise<void>
   installCli: () => Promise<string>
   awaitInitialization: () => Promise<ServerReadyData>

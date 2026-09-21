@@ -1,4 +1,8 @@
 export const dict = {
+  "desktop.agentos.starting": "Starting AgentOS Code…",
+  "desktop.agentos.signIn": "Finish signing in to AgentOS in your browser.",
+  "desktop.agentos.openBrowser": "Open sign-in page",
+  "desktop.agentos.error": "AgentOS Code could not start. Check your connection, then quit and open the app again.",
   "desktop.menu.checkForUpdates": "Check for Updates...",
   "desktop.menu.installCli": "Install CLI...",
   "desktop.menu.reloadWebview": "Reload Webview",

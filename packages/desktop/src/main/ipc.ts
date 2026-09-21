@@ -6,7 +6,7 @@ import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
 import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
 import { parseDesktopNativeBundle, type DesktopNativeBundle } from "@opencode-ai/app/i18n/desktop-native"
 
-import type { FatalRendererError, ServerReadyData, TitlebarTheme } from "../preload/types"
+import type { ElectronAPI, FatalRendererError, ServerReadyData, TitlebarTheme } from "../preload/types"
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { setForceFocus } from "./debug"
 import { assertAttachmentBudget, createPickedFileAuthorizations } from "./attachment-picker"
@@ -33,6 +33,9 @@ const pickerFilters = (ext?: string[]) => {
 const pickedFiles = createPickedFileAuthorizations()
 
 type Deps = {
+  agentos?: Omit<ElectronAPI["agentos"], "startup"> & {
+    startup: () => Awaited<ReturnType<ElectronAPI["agentos"]["startup"]>>
+  }
   killSidecar: () => Promise<void> | void
   relaunch: () => void
   awaitInitialization: () => Promise<ServerReadyData>
@@ -55,6 +58,11 @@ type Deps = {
 }
 
 export function registerIpcHandlers(deps: Deps) {
+  if (deps.agentos) {
+    ipcMain.handle("agentos-startup", () => deps.agentos!.startup())
+    ipcMain.handle("agentos-account", () => deps.agentos!.account())
+    ipcMain.handle("agentos-logout", () => deps.agentos!.logout())
+  }
   const drafts = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
   const updaterSubscriptions = createUpdaterSubscriptions()
   app.once("will-quit", updaterSubscriptions.clear)

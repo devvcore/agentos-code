@@ -1,6 +1,20 @@
 import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
+  "agentos.server.title": "Local coding server",
+  "agentos.server.local": "AgentOS Code runs on this computer and uses your AgentOS account for models and workspace credits.",
+  "agentos.account.title": "AgentOS account",
+  "agentos.account.workspace": "Workspace",
+  "agentos.account.credits": "Credits remaining",
+  "agentos.account.used": "Credits used this period",
+  "agentos.account.plan": "Plan",
+  "agentos.account.refresh": "Refresh",
+  "agentos.account.manage": "Open AgentOS",
+  "agentos.account.signOut": "Sign out and quit",
+  "agentos.account.signOutNote": "Signing out also signs out the AgentOS Code CLI on this computer.",
+  "agentos.account.error": "Could not load your AgentOS account. Check your connection and try again.",
+  "agentos.account.signOutError": "Could not sign out. Check your connection and try again.",
+  "agentos.account.loading": "Loading account…",
   ...DESKTOP_NATIVE_ENGLISH,
   "command.category.suggested": "Suggested",
   "command.category.view": "View",
