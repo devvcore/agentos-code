@@ -1,3 +1,5 @@
+import { AgentOSAccountPanel } from "../agentos-account"
+import { usePlatform } from "@/context/platform"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -33,6 +35,12 @@ export const SettingsProvidersV2: Component<{
   directory: Accessor<string | undefined>
   onBack?: () => void
 }> = (props) => {
+  if (usePlatform().agentos)
+    return (
+      <div class="p-6">
+        <AgentOSAccountPanel />
+      </div>
+    )
   const dialog = useDialog()
   const language = useLanguage()
   const serverSdk = useServerSDK()

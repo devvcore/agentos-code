@@ -1,4 +1,5 @@
 interface ImportMetaEnv {
+  readonly AGENTOS_CODE: string
   readonly OPENCODE_CHANNEL: string
 }
 

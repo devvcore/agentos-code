@@ -11,6 +11,11 @@ const updaterHandler = (_: unknown, state: UpdaterState) => {
 }
 
 const api: ElectronAPI = {
+  agentos: {
+    startup: () => ipcRenderer.invoke("agentos-startup"),
+    account: () => ipcRenderer.invoke("agentos-account"),
+    logout: () => ipcRenderer.invoke("agentos-logout"),
+  },
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),
   installCli: () => ipcRenderer.invoke("install-cli"),
   awaitInitialization: () => ipcRenderer.invoke("await-initialization"),

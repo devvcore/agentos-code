@@ -1,6 +1,7 @@
 import { type ComponentProps } from "solid-js"
 
 export const Mark = (props: { class?: string }) => {
+  if (import.meta.env.VITE_AGENTOS_CODE === "1") return <AgentOSMark {...props} />
   return (
     <svg
       data-component="logo-mark"
@@ -16,6 +17,7 @@ export const Mark = (props: { class?: string }) => {
 }
 
 export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
+  if (import.meta.env.VITE_AGENTOS_CODE === "1") return <AgentOSMark {...props} />
   return (
     <svg
       ref={props.ref}
@@ -32,6 +34,14 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
 }
 
 export const Logo = (props: { class?: string }) => {
+  if (import.meta.env.VITE_AGENTOS_CODE === "1")
+    return (
+      <svg class={props.class} viewBox="0 0 264 42" fill="var(--icon-strong-base)" aria-label="AgentOS Code">
+        <text x="0" y="32" font-size="32" font-family="sans-serif" font-weight="600">
+          AgentOS Code
+        </text>
+      </svg>
+    )
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -57,6 +67,26 @@ export const Logo = (props: { class?: string }) => {
         <path d="M234 24V30H216V24H234Z" fill="var(--icon-weak-base)" />
         <path d="M216 12V18H228V12H216ZM234 24H216V30H234V36H210V6H234V24Z" fill="var(--icon-strong-base)" />
       </g>
+    </svg>
+  )
+}
+
+function AgentOSMark(props: Pick<ComponentProps<"svg">, "ref" | "class">) {
+  return (
+    <svg
+      ref={props.ref}
+      class={props.class}
+      viewBox="0 0 100 100"
+      fill="var(--icon-strong-base)"
+      aria-label="AgentOS Code"
+    >
+      <path d="M59 17.5a4.5 4.5 0 0 1 0 9H33.5a7 7 0 0 0-7 7V59a4.5 4.5 0 0 1-9 0V33.5a16 16 0 0 1 16-16Z" />
+      <path
+        d="M59 17.5a4.5 4.5 0 0 1 0 9H33.5a7 7 0 0 0-7 7V59a4.5 4.5 0 0 1-9 0V33.5a16 16 0 0 1 16-16Z"
+        transform="rotate(180 50 50)"
+      />
+      <rect x="66.5" y="17.5" width="16" height="16" rx="7" />
+      <rect x="17.5" y="66.5" width="16" height="16" rx="7" />
     </svg>
   )
 }

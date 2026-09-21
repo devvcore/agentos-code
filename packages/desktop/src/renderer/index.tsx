@@ -29,15 +29,18 @@ import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./
 import { windowFullscreen } from "./window-fullscreen"
 import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
+import { Button } from "@opencode-ai/ui/button"
+import type { AgentOSStartup } from "@opencode-ai/app/agentos"
 import { Splash } from "@opencode-ai/ui/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 
+const agentos = import.meta.env.VITE_AGENTOS_CODE === "1"
 const root = document.getElementById("root")
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   throw new Error(t("desktop.error.dev.rootNotFound"))
 }
 
-if (import.meta.env.VITE_SENTRY_DSN) {
+if (!agentos && import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN,
     environment: import.meta.env.VITE_SENTRY_ENVIRONMENT ?? import.meta.env.MODE,
@@ -163,12 +166,13 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     }
   })()
 
-  const wslServersApi = os === "windows" ? window.api.wslServers : undefined
+  const wslServersApi = !agentos && os === "windows" ? window.api.wslServers : undefined
 
   return {
     platform: "desktop",
     os,
-    version: pkg.version,
+    version: agentos ? import.meta.env.VITE_AGENTOS_VERSION : pkg.version,
+    agentos: agentos ? window.api.agentos : undefined,
     windowID: windowState.id,
 
     async openDirectoryPickerDialog(opts) {
@@ -324,9 +328,33 @@ window.api.onMenuCommand((id) => {
 listenForDeepLinks()
 
 function LoadingSplash() {
+  const [state, { refetch }] = createResource(
+    async (): Promise<AgentOSStartup | undefined> =>
+      agentos ? window.api.agentos.startup().catch(() => ({ state: "error" as const })) : undefined,
+  )
+  const timer = agentos ? setInterval(refetch, 750) : undefined
+  onCleanup(() => clearInterval(timer))
   return (
     <div class="h-dvh w-screen flex flex-col items-center justify-center bg-background-base">
       <Splash class="w-16 h-20 opacity-50 animate-pulse" />
+      <Show when={agentos}>
+        <p class="mt-6 max-w-sm px-6 text-center text-text-base text-14-regular" role="status">
+          {t(
+            state()?.state === "error"
+              ? "desktop.agentos.error"
+              : state()?.state === "signing-in"
+                ? "desktop.agentos.signIn"
+                : "desktop.agentos.starting",
+          )}
+        </p>
+        <Show when={state()?.signInURL}>
+          {(url) => (
+            <Button class="mt-4" onClick={() => window.api.openExternal(url())}>
+              {t("desktop.agentos.openBrowser")}
+            </Button>
+          )}
+        </Show>
+      </Show>
     </div>
   )
 }
@@ -345,8 +373,13 @@ function DesktopRoot(props: { windowState: DesktopWindowState }) {
     return next satisfies Locale
   }
 
-  // Fetch sidecar credentials (available immediately, before health check)
-  const [sidecar] = createResource(() => window.api.awaitInitialization())
+  // AgentOS starts the renderer only after account validation and server health.
+  const [sidecar] = createResource(() =>
+    window.api.awaitInitialization().catch((error: unknown) => {
+      if (agentos) throw new Error(t("desktop.agentos.error"))
+      throw error
+    }),
+  )
 
   const [defaultServer] = createResource(() => platform.getDefaultServer?.())
   const [locale] = createResource(loadLocale)

@@ -1,3 +1,4 @@
+import { usePlatform } from "@/context/platform"
 import { Tag } from "@opencode-ai/ui/v2/badge-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
@@ -19,6 +20,8 @@ import "./settings-v2.css"
 export const SettingsServersV2: Component = () => {
   const dialog = useDialog()
   const language = useLanguage()
+  if (usePlatform().agentos)
+    return <p class="p-6 text-14-regular text-text-weak">{language.t("agentos.server.local")}</p>
   const controller = useServerManagementController()
   const [store, setStore] = createStore({ filter: "" })
   const wslServers = useFilteredWslServers(() => store.filter)

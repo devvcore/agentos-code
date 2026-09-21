@@ -10,6 +10,8 @@
     "email": "hello@opencode.ai"
   },
   "scripts": {
+    "build:agentos": "bun scripts/build-agentos.ts",
+    "package:agentos": "electron-builder --mac --config electron-builder.agentos.config.ts",
     "typecheck": "tsgo -b",
     "predev": "bun ./scripts/predev.ts",
     "dev": "electron-vite dev",

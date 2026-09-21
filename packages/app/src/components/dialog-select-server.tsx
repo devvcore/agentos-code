@@ -176,6 +176,7 @@ function ServerForm(props: ServerFormProps) {
 }
 
 export function DialogSelectServer() {
+  if (usePlatform().agentos) return <AgentOSServerDialog />
   const dialog = useDialog()
   const controller = useServerManagementController({ onSelect: dialog.close })
 
@@ -718,5 +719,14 @@ export function ServerConnectionForm(props: { controller: ReturnType<typeof useS
         </Button>
       </div>
     </div>
+  )
+}
+
+function AgentOSServerDialog() {
+  const language = useLanguage()
+  return (
+    <Dialog title={language.t("agentos.server.title")}>
+      <p class="p-6 text-14-regular text-text-weak">{language.t("agentos.server.local")}</p>
+    </Dialog>
   )
 }

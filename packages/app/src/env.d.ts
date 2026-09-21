@@ -1,4 +1,6 @@
 interface ImportMetaEnv {
+  readonly VITE_AGENTOS_CODE?: string
+  readonly VITE_AGENTOS_VERSION?: string
   readonly VITE_OPENCODE_SERVER_HOST: string
   readonly VITE_OPENCODE_SERVER_PORT: string
   readonly VITE_OPENCODE_CHANNEL?: "dev" | "beta" | "prod"

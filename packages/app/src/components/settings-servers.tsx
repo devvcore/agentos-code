@@ -1,9 +1,12 @@
+import { usePlatform } from "@/context/platform"
 import { Show, type Component } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { ServerConnectionForm, ServerConnectionList, useServerManagementController } from "./dialog-select-server"
 
 export const SettingsServers: Component = () => {
   const language = useLanguage()
+  if (usePlatform().agentos)
+    return <p class="p-6 text-14-regular text-text-weak">{language.t("agentos.server.local")}</p>
   const controller = useServerManagementController()
 
   return (

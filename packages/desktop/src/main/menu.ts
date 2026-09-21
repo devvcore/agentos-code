@@ -7,7 +7,7 @@ import {
   type DesktopMenuRole,
 } from "@opencode-ai/app/desktop-menu"
 
-import { UPDATER_ENABLED } from "./constants"
+import { AGENTOS_CODE, UPDATER_ENABLED } from "./constants"
 import { runDesktopMenuAction } from "./desktop-menu-actions"
 import { openExternalURL } from "./windows"
 import { nativeT } from "./native-translations"
@@ -57,7 +57,7 @@ function nativeItem(entry: DesktopMenuEntry, deps: Deps): MenuItemConstructorOpt
       })
   }
   if (entry.href) {
-    const href = entry.href
+    const href = AGENTOS_CODE ? "https://tryagentos.net/code" : entry.href
     item.click = () => openExternalURL(href)
   }
 

@@ -5,6 +5,12 @@ import { applySession, isInteractive, requireAccount, signIn } from "./agentos/s
 
 process.env.AGENTOS_CODE = "1"
 const args = process.argv.slice(2)
+const browserLogin = args[0] === "serve" && args.includes("--login")
+if (browserLogin) {
+  const index = args.indexOf("--login")
+  args.splice(index, 1)
+  process.argv.splice(index + 2, 1)
+}
 if (process.env.AGENTOS_API_TOKEN) process.env.AGENTOS_CODE_EXTERNAL_TOKEN = "1"
 else delete process.env.AGENTOS_CODE_EXTERNAL_TOKEN
 
@@ -51,7 +57,7 @@ try {
   agentos-code [directory]               Open the coding terminal
   agentos-code run "your task"           Run a coding task
   agentos-code run --format json "task"  Stream events for AgentOS
-  agentos-code serve                    Start the headless API
+  agentos-code serve [--login]          Start the API; --login opens browser sign-in if needed
   agentos-code models                   List AgentOS coding models
 
 Use AGENTOS_MODEL to choose a model. AgentOS handles usage and credits.
@@ -67,7 +73,7 @@ Append --help to an OpenCode command for its options.`)
     // Set the account before importing any runtime module: global paths and
     // worker environment are captured during OpenCode module initialization.
     if (!args.includes("--help") && !args.includes("-h") && !args.includes("--version") && !args.includes("-v")) {
-      applySession(await requireAccount({ interactive: await isInteractive(args), open: openSignIn }))
+      applySession(await requireAccount({ interactive: browserLogin || (await isInteractive(args)), open: openSignIn }))
     }
     await import("./index")
   }

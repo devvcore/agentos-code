@@ -1,3 +1,5 @@
+import { AgentOSAccountPanel } from "./agentos-account"
+import { usePlatform } from "@/context/platform"
 import { Button } from "@opencode-ai/ui/button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
@@ -28,6 +30,12 @@ const PROVIDER_NOTES = [
 ] as const
 
 export const SettingsProviders: Component<{ onBack?: () => void }> = (props) => {
+  if (usePlatform().agentos)
+    return (
+      <div class="p-6 sm:p-10 overflow-y-auto">
+        <AgentOSAccountPanel />
+      </div>
+    )
   return (
     <SettingsServerScope>
       <SettingsProvidersContent onBack={props.onBack} />

@@ -75,3 +75,16 @@ test("uses config for legacy servers", () => {
     modelID: "claude",
   })
 })
+
+test("preserves the upstream provider namespace in AgentOS model IDs", () => {
+  expect(resolveDefaultModel(undefined, "agentos/openai/gpt-5.6-luna")).toEqual({
+    providerID: "agentos",
+    modelID: "openai/gpt-5.6-luna",
+  })
+})
+
+test("ignores incomplete legacy model IDs", () => {
+  expect(resolveDefaultModel(undefined, "agentos")).toBeUndefined()
+  expect(resolveDefaultModel(undefined, "agentos/")).toBeUndefined()
+  expect(resolveDefaultModel(undefined, "/model")).toBeUndefined()
+})
