@@ -1,18 +1,18 @@
-# AgentOS Code
+# OmniCode
 
 A fork of [OpenCode](https://github.com/anomalyco/opencode) for coding in AgentOS and your terminal. Sign in with your AgentOS account; coding uses the same workspace credits and Usage ledger. Provider API keys stay on the AgentOS server.
 
 ## Install
 
-[Install AgentOS Code](https://tryagentos.net/code) for macOS Apple Silicon or Linux x64:
+[Install OmniCode](https://tryagentos.net/code) for macOS Apple Silicon or Linux x64:
 
 ```sh
 curl -fsSL https://tryagentos.net/code/install.sh | bash
 ```
 
-The installer verifies the release checksum, installs `agentos-code` in `~/.local/bin`, and adds that directory to your Bash or Zsh PATH if needed. Open a new terminal if the installer updated your PATH, then run `agentos-code` in your project. Your browser opens automatically for AgentOS sign-in.
+The installer verifies the release checksum, installs `omnicode` (with an `agentos-code` compatibility alias) in `~/.local/bin`, and adds that directory to your Bash or Zsh PATH if needed. Open a new terminal if the installer updated your PATH, then run `omnicode` in your project. Your browser opens automatically for AgentOS sign-in.
 
-[Direct downloads and checksums](https://github.com/devvcore/agentos-code/releases/tag/v0.1.1) are also available. Set `AGENTOS_CODE_INSTALL_DIR` for a custom destination, or `AGENTOS_CODE_NO_MODIFY_PATH=1` to leave your shell profile unchanged.
+[Direct downloads and checksums](https://github.com/devvcore/agentos-code/releases/tag/v0.2.0) are also available. Set `AGENTOS_CODE_INSTALL_DIR` for a custom destination, or `AGENTOS_CODE_NO_MODIFY_PATH=1` to leave your shell profile unchanged.
 
 ### Build from source
 
@@ -24,21 +24,21 @@ cd agentos-code
 ./script/install-agentos.sh
 export PATH="$HOME/.local/bin:$PATH"
 cd /path/to/your/project
-agentos-code
+omnicode
 ```
 
 The installer builds the native binary for this computer. There is no published npm package or automatic updater yet. Windows can build with `bun run build:agentos --single --skip-install --skip-embed-web-ui` from `packages/opencode` after installing dependencies.
 
 ```sh
-agentos-code run "Fix the failing tests"
-agentos-code models
-AGENTOS_MODEL=openai/gpt-5.6-luna agentos-code
-agentos-code usage
-agentos-code whoami --json
-agentos-code logout
+omnicode run "Fix the failing tests"
+omnicode models
+AGENTOS_MODEL=openai/gpt-5.6-luna omnicode
+omnicode usage
+omnicode whoami --json
+omnicode logout
 ```
 
-Opening `agentos-code` automatically starts browser sign-in when you are signed out or your saved login has expired. Coding stays unavailable until your AgentOS account is verified. Headless commands require an existing login or an explicit token.
+Opening `omnicode` automatically starts browser sign-in when you are signed out or your saved login has expired. Coding stays unavailable until your AgentOS account is verified. Headless commands require an existing login or an explicit token.
 
 Inside the terminal, `/login` opens AgentOS sign-in, `/usage` shows your account and workspace credits, and `/logout` revokes the grant and exits. `/connect` remains an alias for `/login`. Stop any running task before switching accounts. The workspace approved in the browser owns the usage.
 
@@ -48,9 +48,9 @@ Use `login --url https://your-agentos.example/api` for a self-hosted server, or 
 
 ## AgentOS integration
 
-The server must include the AgentOS Code integration: `GET /inference/v1/account`, the capability-rich model catalog, and the `agentos_code` engine. Existing AgentOS servers without this update return an actionable upgrade error. Deployment is a separate release step.
+The server must include the OmniCode integration: `GET /inference/v1/account`, the capability-rich model catalog, and the `agentos_code` engine. Existing AgentOS servers without this update return an actionable upgrade error. Deployment is a separate release step.
 
-In AgentOS, create an Agent, open Advanced, and choose **AgentOS Code** as its framework. It uses the regular model picker and workspace credits, with no separate provider connection. The backend creates a scoped, revocable token bound to that agent; its model cannot be overridden by the CLI.
+In AgentOS, create an Agent, open Advanced, and choose **OmniCode** as its framework. It uses the regular model picker and workspace credits, with no separate provider connection. The backend creates a scoped, revocable token bound to that agent; its model cannot be overridden by the CLI.
 
 Operators install the Linux binary in the execution environment and set `AGENTOS_CODE_CLI` to its absolute path. Hosted sandbox runs install the pinned, checksum-verified Linux release on first use. Set `AGENTOS_CODE_SANDBOX_CLI` only for a separately preinstalled binary; `AGENTOS_SELF_URL` must be reachable HTTPS. Local execution is unavailable without an installed runtime. See the AgentOS repository's `docs/AGENTOS_CODE.md` for rollout and verification.
 
@@ -60,7 +60,7 @@ Operators install the Linux binary in the execution environment and set `AGENTOS
 - Project configuration cannot replace the AgentOS provider endpoint or the AgentOS MCP credential target. Other local tools and MCP servers retain OpenCode's permission controls.
 - Credentials are stored with mode 0600 in `~/.config/agentos-code/auth.json` (or the XDG config directory). Data, sessions, and caches use separate `agentos-code` paths. `AGENTOS_CODE_HOME` overrides only the credential directory.
 - Sharing, upstream auto-updates, external plugins, and debug config dumps are disabled in AgentOS mode. Local coding tools still have access to the files and commands you approve; run untrusted projects in a sandbox.
-- `serve` requires `OPENCODE_SERVER_PASSWORD`. Use the local CLI or the AgentOS engine for the supported flows; the upstream desktop and web applications are not rebranded releases of AgentOS Code.
+- `serve` requires `OPENCODE_SERVER_PASSWORD`. Use the local CLI or the AgentOS engine for the supported flows; the OmniCode desktop preview is documented in [packages/desktop/AGENTOS.md](packages/desktop/AGENTOS.md).
 
 ## Development and verification
 
@@ -70,7 +70,7 @@ cd packages/opencode
 bun run agentos --help
 bun test test/agentos
 bun run typecheck
-OPENCODE_CHANNEL=agentos OPENCODE_VERSION=0.1.1 bun run build:agentos --single --skip-install --skip-embed-web-ui
+OPENCODE_CHANNEL=agentos OPENCODE_VERSION=0.2.0 bun run build:agentos --single --skip-install --skip-embed-web-ui
 ```
 
 The AgentOS integration suite exercises the real compiled CLI, file tools, session resume, token binding and ledger settlement against a controlled model response. Live provider and production deployment checks remain separate.

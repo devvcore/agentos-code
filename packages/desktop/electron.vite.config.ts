@@ -106,7 +106,7 @@ const require = __cjs_mod__.createRequire(import.meta.url);
       {
         name: "agentos:title",
         transformIndexHtml: (html) =>
-          agentos ? html.replace("<title>OpenCode</title>", "<title>AgentOS Code</title>") : html,
+          agentos ? html.replace("<title>OpenCode</title>", "<title>OmniCode</title>") : html,
       },
     ],
     publicDir: "../../../app/public",

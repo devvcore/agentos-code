@@ -10,8 +10,8 @@ if (!local && !process.env.CSC_NAME?.startsWith("Developer ID Application: ")) {
 
 const config: Configuration = {
   appId: "net.tryagentos.code",
-  productName: "AgentOS Code",
-  artifactName: "agentos-code-desktop-${os}-${arch}-${version}.${ext}",
+  productName: "OmniCode",
+  artifactName: "omnicode-desktop-${os}-${arch}-${version}.${ext}",
   directories: { output: "dist-agentos", buildResources: "resources" },
   extraMetadata: {
     version: process.env.AGENTOS_VERSION ?? "0.2.0-preview.1",
@@ -20,10 +20,11 @@ const config: Configuration = {
   },
   files: ["out/**/*"],
   extraResources: [
+    { from: "resources/omnicode-notices.txt", to: "omnicode-notices.txt" },
     { from: "resources/agentos-code", to: "agentos-code" },
     { from: "resources/icons", to: "icons" },
   ],
-  protocols: { name: "AgentOS Code", schemes: ["agentos-code"] },
+  protocols: { name: "OmniCode", schemes: ["agentos-code"] },
   publish: null,
   afterPack: local
     ? async (context) => {
@@ -32,7 +33,7 @@ const config: Configuration = {
           "--deep",
           "--sign",
           "-",
-          join(context.appOutDir, "AgentOS Code.app"),
+          join(context.appOutDir, "OmniCode.app"),
         ])
       }
     : undefined,

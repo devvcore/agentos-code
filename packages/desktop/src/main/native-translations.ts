@@ -22,6 +22,6 @@ export function setNativeTranslations(next: DesktopNativeBundle) {
 }
 
 export function nativeT(key: DesktopNativeKey, params?: Record<string, string | number>) {
-  const message = AGENTOS_CODE ? bundle.messages[key].replaceAll("OpenCode", "AgentOS Code") : bundle.messages[key]
+  const message = AGENTOS_CODE ? bundle.messages[key].replaceAll("OpenCode", "OmniCode") : bundle.messages[key]
   return formatDesktopNativeMessage(message, params)
 }

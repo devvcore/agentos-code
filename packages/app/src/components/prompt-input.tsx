@@ -73,6 +73,7 @@ import {
   type PromptInputSubmission,
 } from "./prompt-input/contracts"
 import { createPromptSubmit } from "./prompt-input/submit"
+import { createOmniDictation } from "./omni-dictation"
 import { PromptPopover, type AtOption, type SlashCommand } from "./prompt-input/slash-popover"
 import { PromptContextItems } from "./prompt-input/context-items"
 import { PromptImageAttachments } from "./prompt-input/image-attachments"
@@ -1229,7 +1230,24 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       model: props.controls.model.selection,
     })
 
+  const dictation = createOmniDictation({
+    scope: () => prompt.capture(),
+    working,
+    insert: (text) => {
+      addPart({
+        type: "text",
+        content: (prompt.current().some((part) => "content" in part && part.content.trim()) ? " " : "") + text,
+        start: 0,
+        end: text.length,
+      })
+    },
+  })
+
   const handleKeyDown = (event: KeyboardEvent) => {
+    if (dictation.busy() && event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault()
+      return
+    }
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "u") {
       event.preventDefault()
       if (store.mode !== "normal") return
@@ -1461,13 +1479,17 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
       />
       <DockShellForm
         data-dock-border-underlay="legacy"
-        onSubmit={handleSubmit}
+        onSubmit={(event) => {
+          if (dictation.busy()) event.preventDefault()
+          else void handleSubmit(event)
+        }}
         classList={{
           "group/prompt-input": true,
           "border-icon-info-active border-dashed": store.draggingType !== null,
           [props.class ?? ""]: !!props.class,
         }}
       >
+        <dictation.Effects />
         <PromptDragOverlay
           type={store.draggingType}
           label={language.t(store.draggingType === "@mention" ? "prompt.dropzone.file.label" : "prompt.dropzone.label")}
@@ -1575,11 +1597,12 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
             />
 
             <div class="flex items-center gap-1 pointer-events-auto">
+              <dictation.Controls />
               <Tooltip placement="top" inactive={!working() && blank()} value={tip()}>
                 <IconButton
                   data-action="prompt-submit"
                   type="submit"
-                  disabled={!working() && blank()}
+                  disabled={dictation.busy() || (!working() && blank())}
                   tabIndex={store.mode === "normal" ? undefined : -1}
                   icon={stopping() ? "stop" : store.mode === "shell" ? "arrow-undo-down" : "arrow-up"}
                   variant="primary"
@@ -1621,6 +1644,11 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
           </div>
         </div>
       </DockShellForm>
+      <Show when={dictation.error()}>
+        <p role="alert" class="text-12-regular text-text-weak">
+          {dictation.error()}
+        </p>
+      </Show>
       <Show when={store.mode === "normal" || store.mode === "shell"}>
         <DockTray attach="top">
           <div class="px-1.75 pt-5.5 pb-2 flex items-center gap-2 min-w-0">

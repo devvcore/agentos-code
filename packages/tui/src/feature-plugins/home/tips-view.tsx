@@ -141,7 +141,7 @@ export function Tips(props: { api: TuiPluginApi; connected?: boolean }) {
         "Use {highlight}/login{/highlight} to sign in with your AgentOS account",
         "Use {highlight}/usage{/highlight} to check your workspace credits",
         "Use {highlight}/logout{/highlight} to sign out and exit",
-        "Run {highlight}agentos-code run{/highlight} to send a coding task from your shell",
+        "Run {highlight}omnicode run{/highlight} to send a coding task from your shell",
       ]
       return tips[Math.floor(tipOffset * tips.length)] ?? tips[0]
     }

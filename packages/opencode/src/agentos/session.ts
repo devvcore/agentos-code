@@ -71,7 +71,7 @@ export function terminalAccount(reload: (result: PreparedAccount) => Promise<voi
     async login(input: { url: string; onURL: (url: string) => void; signal: AbortSignal }) {
       if (process.env.AGENTOS_CODE_EXTERNAL_TOKEN)
         throw new Error(
-          "This session uses AGENTOS_API_TOKEN. Unset it and restart AgentOS Code to use browser sign-in.",
+          "This session uses AGENTOS_API_TOKEN. Unset it and restart OmniCode to use browser sign-in.",
         )
       const result = await signIn({
         ...input,

@@ -1,6 +1,6 @@
 import { EOL } from "os"
 import { Schema } from "effect"
-import { logo as glyphs } from "./logo"
+import { logo as upstream, omni } from "./logo"
 
 const wordmark = [
   `⠀                                ▄     `,
@@ -46,7 +46,12 @@ export function empty() {
 }
 
 export function logo(pad?: string) {
-  if (process.env.AGENTOS_CODE === "1") return (pad || "") + "AgentOS Code"
+  const glyphs = process.env.AGENTOS_CODE === "1" ? omni : upstream
+  if (process.env.AGENTOS_CODE === "1" && !process.stdout.isTTY && !process.stderr.isTTY) {
+    return omni.left
+      .map((row, i) => (pad || "") + (row + " " + omni.right[i]).replaceAll("_", " ").replace(/[~^]/g, "▀"))
+      .join(EOL)
+  }
   if (!process.stdout.isTTY && !process.stderr.isTTY) {
     const result = []
     for (const row of wordmark) {

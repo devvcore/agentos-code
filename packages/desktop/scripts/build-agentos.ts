@@ -3,7 +3,7 @@ import { $ } from "bun"
 import { copyFile } from "node:fs/promises"
 
 if (process.platform !== "darwin" || process.arch !== "arm64") {
-  throw new Error("The AgentOS Code desktop preview currently builds on Apple Silicon macOS.")
+  throw new Error("The OmniCode desktop preview currently builds on Apple Silicon macOS.")
 }
 const version = process.env.AGENTOS_VERSION ?? "0.2.0-preview.1"
 process.env.AGENTOS_CODE = "1"

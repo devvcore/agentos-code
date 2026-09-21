@@ -32,6 +32,7 @@ type PlatformBase = {
   agentos?: {
     account: () => Promise<import("../agentos").AgentOSAccount>
     logout: () => Promise<void>
+    transcribe?: (input: import("../agentos").AgentOSDictation) => Promise<import("../agentos").AgentOSDictationResult>
   }
   /** App version */
   version?: string
