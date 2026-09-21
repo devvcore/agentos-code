@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="-12.5 -12.5 125 125">
+  <!-- Match the Dock's 80% artwork footprint; the outer canvas stays transparent. -->
+  <rect width="100" height="100" rx="20" fill="#fff"/>
+  <g fill="#0a0a0a" transform="translate(9 9) scale(1.26153846) translate(-17.5 -17.5)">
+    <path d="M59 17.5a4.5 4.5 0 0 1 0 9H33.5a7 7 0 0 0-7 7V59a4.5 4.5 0 0 1-9 0V33.5a16 16 0 0 1 16-16Z"/>
+    <path d="M59 17.5a4.5 4.5 0 0 1 0 9H33.5a7 7 0 0 0-7 7V59a4.5 4.5 0 0 1-9 0V33.5a16 16 0 0 1 16-16Z" transform="rotate(180 50 50)"/>
+    <rect x="66.5" y="17.5" width="16" height="16" rx="7"/>
+    <rect x="17.5" y="66.5" width="16" height="16" rx="7"/>
+  </g>
+</svg>
