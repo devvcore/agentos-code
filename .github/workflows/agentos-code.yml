@@ -44,6 +44,11 @@ jobs:
         env:
           OPENCODE_CHANNEL: agentos
           OPENCODE_VERSION: ${{ inputs.version || '0.2.0' }}
+      - name: Verify the Linux download starts
+        run: |
+          ./dist/agentos-code-linux-x64/bin/agentos-code --version
+          ./dist/agentos-code-linux-x64/bin/agentos-code --help
+        working-directory: packages/opencode
       - uses: actions/upload-artifact@v4
         with:
           name: agentos-code-linux-x64

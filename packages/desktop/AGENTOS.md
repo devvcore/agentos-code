@@ -11,6 +11,12 @@ desktop storage are `net.tryagentos.code`. Coding sessions use the same runtime
 storage as the OmniCode CLI. OpenCode provider onboarding, migration, remote
 servers, WSL, telemetry upload, and upstream automatic updates are not enabled.
 
+## Prompt dictation
+
+The microphone records up to five minutes and inserts the transcript into the current draft for review. It never sends the prompt. Cancelling or switching sessions discards the recording and releases the microphone. Audio is sent through the saved AgentOS account to `/api/desktop/dictation?reconcile_tasks=false`, using the existing transcription and workspace-credit path.
+
+The prompt uses the actual MIT-licensed `voice-glow` and `border-beam` packages from Libraries.dev through a small React root inside the Solid composer. Their license ships in the app resources.
+
 ## Build on Apple Silicon macOS
 
 From this package, with Bun 1.3.14 installed:

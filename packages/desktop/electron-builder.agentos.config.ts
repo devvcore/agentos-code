@@ -20,6 +20,7 @@ const config: Configuration = {
   },
   files: ["out/**/*"],
   extraResources: [
+    { from: "resources/omnicode-notices.txt", to: "omnicode-notices.txt" },
     { from: "resources/agentos-code", to: "agentos-code" },
     { from: "resources/icons", to: "icons" },
   ],
