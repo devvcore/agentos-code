@@ -26,6 +26,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
+import { createOmniDictation } from "./omni-dictation"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
   createPromptInputV2Controller,
@@ -42,12 +43,26 @@ export type PromptInputV2ComposerProps = {
 export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "submission">
 export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly model: PromptInputProps["controls"]["model"]
+  readonly dictationScope: unknown
 }
 
 export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
   const dialog = useDialog()
   const command = useCommand()
   const language = useLanguage()
+  const dictation = createOmniDictation({
+    scope: () => props.controller.dictationScope,
+    working: () => props.controller.view.submit.working?.() ?? false,
+    insert: (text) => {
+      props.controller.addPart({
+        type: "text",
+        content: (props.controller.value().trim() ? " " : "") + text,
+        start: 0,
+        end: text.length,
+      })
+      props.controller.restoreFocus()
+    },
+  })
 
   return (
     <div class="flex flex-col gap-3">
@@ -55,6 +70,9 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         controller={props.controller}
         borderUnderlay={props.borderUnderlay}
         class={props.class}
+        voiceControl={<dictation.Controls />}
+        decoration={<dictation.Effects />}
+        submitDisabled={dictation.busy()}
         variantControlVisible={!props.controller.model.loading}
         attachKeybind={command.keybindParts("file.attach")}
         attachShortcut={command.keybind("file.attach")}
@@ -74,6 +92,11 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
           />
         }
       />
+      <Show when={dictation.error()}>
+        <p role="alert" class="text-12-regular text-text-weak">
+          {dictation.error()}
+        </p>
+      </Show>
     </div>
   )
 }
@@ -409,6 +432,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
+  Object.defineProperty(controller, "dictationScope", { get: () => prompt.capture() })
 
   command.register("prompt-input", () => [
     {

@@ -1,11 +1,11 @@
-name: AgentOS Code
+name: OmniCode
 on:
   workflow_dispatch:
     inputs:
       version:
         description: Version to build for the Linux download
         required: true
-        default: '0.1.1'
+        default: '0.2.0'
         type: string
   push:
     branches: [codex/agentos-code]
@@ -43,7 +43,7 @@ jobs:
         working-directory: packages/opencode
         env:
           OPENCODE_CHANNEL: agentos
-          OPENCODE_VERSION: ${{ inputs.version || '0.1.1' }}
+          OPENCODE_VERSION: ${{ inputs.version || '0.2.0' }}
       - uses: actions/upload-artifact@v4
         with:
           name: agentos-code-linux-x64

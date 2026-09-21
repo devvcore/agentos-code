@@ -51,7 +51,7 @@ import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { setNativeTranslations } from "./native-translations"
 
-import { readAgentOSAccount, revokeAgentOSAccount, startAgentOSRuntime } from "./agentos-runtime"
+import { readAgentOSAccount, revokeAgentOSAccount, startAgentOSRuntime, transcribeAgentOSAudio } from "./agentos-runtime"
 import type { AgentOSStartup } from "@opencode-ai/app/agentos"
 
 const agentosBinary = join(
@@ -148,7 +148,7 @@ const main = Effect.gen(function* () {
     process.env.XDG_STATE_HOME = join(root, "state")
     return root
   })()
-  app.setName(AGENTOS_CODE ? "AgentOS Code" : app.isPackaged ? APP_NAMES[CHANNEL] : "OpenCode Dev")
+  app.setName(AGENTOS_CODE ? "OmniCode" : app.isPackaged ? APP_NAMES[CHANNEL] : "OpenCode Dev")
   app.setAppUserModelId(appId)
   app.setPath(
     "userData",
@@ -295,6 +295,7 @@ const main = Effect.gen(function* () {
       ? {
           startup: () => agentosStartup,
           account: () => readAgentOSAccount(agentosBinary),
+          transcribe: (input) => transcribeAgentOSAudio(agentosBinary, input),
           logout: async () => {
             await revokeAgentOSAccount(agentosBinary)
             await killSidecar()

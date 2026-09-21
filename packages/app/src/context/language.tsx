@@ -197,7 +197,7 @@ export const { use: useLanguage, provider: LanguageProvider } = createSimpleCont
       if (import.meta.env.VITE_AGENTOS_CODE !== "1") return translate(key, params)
       if (key === "command.provider.connect" || key === "settings.providers.title")
         return translate("agentos.account.title", params)
-      return translate(key, params).replaceAll("OpenCode", "AgentOS Code")
+      return translate(key, params).replaceAll("OpenCode", "OmniCode")
     }
 
     const plural = (key: PluralKey, count: number, params?: Record<string, string | number | boolean>) => {

@@ -15,6 +15,7 @@ const api: ElectronAPI = {
     startup: () => ipcRenderer.invoke("agentos-startup"),
     account: () => ipcRenderer.invoke("agentos-account"),
     logout: () => ipcRenderer.invoke("agentos-logout"),
+    transcribe: (input) => ipcRenderer.invoke("agentos-transcribe", input),
   },
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),
   installCli: () => ipcRenderer.invoke("install-cli"),

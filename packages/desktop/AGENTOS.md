@@ -1,6 +1,6 @@
-# AgentOS Code desktop preview
+# OmniCode desktop preview
 
-The Electron app and CLI share the AgentOS Code login. Desktop bundles its own
+The Electron app and CLI share the OmniCode login. Desktop bundles its own
 compiled CLI, starts it on authenticated loopback, and opens browser sign-in when
 no valid account exists. Model access and usage use the AgentOS inference service.
 Settings → AgentOS account shows the current workspace and credits. Signing out
@@ -8,7 +8,7 @@ revokes the shared login and quits the desktop app.
 
 This is a separate application from AgentOS Desktop: its bundle identifier and
 desktop storage are `net.tryagentos.code`. Coding sessions use the same runtime
-storage as the AgentOS Code CLI. OpenCode provider onboarding, migration, remote
+storage as the OmniCode CLI. OpenCode provider onboarding, migration, remote
 servers, WSL, telemetry upload, and upstream automatic updates are not enabled.
 
 ## Build on Apple Silicon macOS
@@ -20,7 +20,7 @@ bun run build:agentos
 bun run typecheck
 bun test src/main/agentos-runtime.test.ts src/main/index.test.ts src/renderer/initialization.test.ts
 AGENTOS_ALLOW_ADHOC=1 bun run package:agentos --dir
-open 'dist-agentos/mac-arm64/AgentOS Code.app'
+open 'dist-agentos/mac-arm64/OmniCode.app'
 ```
 
 The default version is `0.2.0-preview.1`; set `AGENTOS_VERSION` consistently for

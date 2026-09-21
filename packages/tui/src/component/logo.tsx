@@ -6,7 +6,7 @@ import { logo } from "../logo"
 export function Logo() {
   const { theme } = useTheme()
   if (process.env.AGENTOS_CODE === "1") {
-    return <box height={4} justifyContent="center"><text fg={theme.text} attributes={TextAttributes.BOLD}>AgentOS Code</text></box>
+    return <box height={4} justifyContent="center"><text fg={theme.text} attributes={TextAttributes.BOLD}>omnicode</text></box>
   }
 
   const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {

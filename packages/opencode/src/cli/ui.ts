@@ -46,7 +46,7 @@ export function empty() {
 }
 
 export function logo(pad?: string) {
-  if (process.env.AGENTOS_CODE === "1") return (pad || "") + "AgentOS Code"
+  if (process.env.AGENTOS_CODE === "1") return (pad || "") + "OmniCode"
   if (!process.stdout.isTTY && !process.stderr.isTTY) {
     const result = []
     for (const row of wordmark) {

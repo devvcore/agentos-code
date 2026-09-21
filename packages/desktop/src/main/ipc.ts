@@ -62,6 +62,10 @@ export function registerIpcHandlers(deps: Deps) {
     ipcMain.handle("agentos-startup", () => deps.agentos!.startup())
     ipcMain.handle("agentos-account", () => deps.agentos!.account())
     ipcMain.handle("agentos-logout", () => deps.agentos!.logout())
+    ipcMain.handle("agentos-transcribe", (event, input) => {
+      if (event.senderFrame !== event.sender.mainFrame) throw new Error("Invalid dictation sender")
+      return deps.agentos!.transcribe(input)
+    })
   }
   const drafts = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
   const updaterSubscriptions = createUpdaterSubscriptions()

@@ -1,6 +1,19 @@
 import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
+  "omni.voice.start": "Dictate a prompt",
+  "omni.voice.stop": "Finish dictation",
+  "omni.voice.cancel": "Cancel dictation",
+  "omni.voice.listening": "Listening",
+  "omni.voice.requesting": "Allow microphone…",
+  "omni.voice.processing": "Transcribing…",
+  "omni.voice.denied": "Allow microphone access in System Settings to dictate a prompt.",
+  "omni.voice.failed": "Could not transcribe the recording. Your draft has not changed. Try again.",
+  "omni.voice.empty": "No speech was detected. Try recording again.",
+  "omni.voice.invalid": "The recording could not be read. Try recording again.",
+  "omni.voice.auth": "Your AgentOS sign-in has expired. Sign in again to use dictation.",
+  "omni.voice.credits": "Your AgentOS workspace is out of credits. Open your account to add credits.",
+  "omni.voice.tooLong": "The recording is too large. Try a shorter prompt.",
   "agentos.server.title": "Local coding server",
   "agentos.server.local": "AgentOS Code runs on this computer and uses your AgentOS account for models and workspace credits.",
   "agentos.account.title": "AgentOS account",

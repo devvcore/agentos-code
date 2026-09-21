@@ -141,7 +141,7 @@ test("expired saved login starts browser sign-in; a valid saved login does not",
 test("headless signed-out runs fail without opening a browser or sending a model request", async () => {
   const fixture = server()
   try {
-    await expect(requireAccount({ interactive: false, open: fixture.open })).rejects.toThrow("agentos-code login")
+    await expect(requireAccount({ interactive: false, open: fixture.open })).rejects.toThrow("omnicode login")
     expect(fixture.calls).toEqual([])
   } finally {
     await fixture.instance.stop(true)

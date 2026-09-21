@@ -41,6 +41,9 @@ export type PromptInputV2Props = {
   borderUnderlay?: boolean
   class?: string
   modelControl?: JSX.Element
+  voiceControl?: JSX.Element
+  decoration?: JSX.Element
+  submitDisabled?: boolean
   variantControlVisible?: boolean
   attachKeybind?: string[]
   attachShortcut?: string
@@ -117,13 +120,14 @@ export function PromptInputV2(props: PromptInputV2Props) {
         }}
         onSubmit={(event) => {
           event.preventDefault()
-          if (!props.disabled) props.controller.submit()
+          if (!props.disabled && !props.submitDisabled) props.controller.submit()
         }}
         onDragEnter={props.controller.onDragEnter}
         onDragOver={props.controller.onDragOver}
         onDragLeave={props.controller.onDragLeave}
         onDrop={props.controller.onDrop}
       >
+        {props.decoration}
         <Show when={state.drag === "active"}>
           <div class="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-xl bg-v2-background-bg-base/90 text-v2-text-text-base">
             {i18n.t("ui.promptInput.dropFiles")}
@@ -170,11 +174,15 @@ export function PromptInputV2(props: PromptInputV2Props) {
               props.controller.onInput(prompt.map((part) => part.content).join(""), [...prompt, ...images], cursor)
             }}
             onKeyDown={(event) => {
+              if (props.submitDisabled && event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault()
+                return
+              }
               if (props.controller.onKeyDown(event)) return
               if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
                 event.preventDefault()
                 if (event.repeat) return
-                props.controller.submit()
+                if (!props.disabled && !props.submitDisabled) props.controller.submit()
               }
             }}
             onKeyUp={updateCursor}
@@ -254,13 +262,16 @@ export function PromptInputV2(props: PromptInputV2Props) {
               )}
             </Show>
           </div>
+          {props.voiceControl}
           <PromptInputV2SubmitButton
             mode={state.mode}
             stopping={view.submit.stopping()}
-            disabled={!props.controller.canSubmit()}
+            disabled={props.submitDisabled || !props.controller.canSubmit()}
             sendLabel={i18n.t("ui.promptInput.send")}
             stopLabel={i18n.t("ui.promptInput.stop")}
-            onSubmit={props.controller.submit}
+            onSubmit={() => {
+              if (!props.submitDisabled) props.controller.submit()
+            }}
             onStop={props.controller.stop}
           />
         </div>

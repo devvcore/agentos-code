@@ -36,9 +36,9 @@ export const Splash = (props: Pick<ComponentProps<"svg">, "ref" | "class">) => {
 export const Logo = (props: { class?: string }) => {
   if (import.meta.env.VITE_AGENTOS_CODE === "1")
     return (
-      <svg class={props.class} viewBox="0 0 264 42" fill="var(--icon-strong-base)" aria-label="AgentOS Code">
+      <svg class={props.class} viewBox="0 0 180 42" fill="var(--icon-strong-base)" aria-label="OmniCode">
         <text x="0" y="32" font-size="32" font-family="sans-serif" font-weight="600">
-          AgentOS Code
+          omnicode
         </text>
       </svg>
     )
@@ -78,7 +78,7 @@ function AgentOSMark(props: Pick<ComponentProps<"svg">, "ref" | "class">) {
       class={props.class}
       viewBox="0 0 100 100"
       fill="var(--icon-strong-base)"
-      aria-label="AgentOS Code"
+      aria-label="OmniCode"
     >
       <path d="M59 17.5a4.5 4.5 0 0 1 0 9H33.5a7 7 0 0 0-7 7V59a4.5 4.5 0 0 1-9 0V33.5a16 16 0 0 1 16-16Z" />
       <path

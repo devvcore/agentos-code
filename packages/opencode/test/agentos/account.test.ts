@@ -17,7 +17,7 @@ test("PKCE login binds the loopback callback to state and exchanges once", async
     })
     if (url.pathname === "/api/oauth/register") {
       const body = await request.json()
-      expect(body.client_name).toBe("AgentOS Code")
+      expect(body.client_name).toBe("OmniCode")
       expect(new URL(body.redirect_uris[0]).hostname).toBe("127.0.0.1")
       state.redirect = body.redirect_uris[0]
       return Response.json({ client_id: "client-test" })

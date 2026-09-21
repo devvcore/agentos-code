@@ -34,12 +34,12 @@ export async function loadCredential(): Promise<Credential> {
     return Credential.parse({ url: apiURL(process.env.AGENTOS_URL), token: process.env.AGENTOS_API_TOKEN })
   }
   const file = Bun.file(credentialPath())
-  if (!(await file.exists())) throw new SignInRequired("Sign in with `agentos-code login` first.")
+  if (!(await file.exists())) throw new SignInRequired("Sign in with `omnicode login` first.")
   const result = Credential.safeParse(await file.json().catch(() => null))
-  if (!result.success) throw new SignInRequired("AgentOS sign-in is invalid. Run `agentos-code login` again.")
+  if (!result.success) throw new SignInRequired("AgentOS sign-in is invalid. Run `omnicode login` again.")
   const url = apiURL(result.data.url)
   if (process.env.AGENTOS_URL && apiURL(process.env.AGENTOS_URL) !== url) {
-    throw new Error("This login belongs to another AgentOS server. Run `agentos-code login --url <url>`.")
+    throw new Error("This login belongs to another AgentOS server. Run `omnicode login --url <url>`.")
   }
   return { ...result.data, url }
 }
@@ -61,10 +61,10 @@ export async function jsonRequest(url: string, init: RequestInit = {}): Promise<
   if (!response.ok) {
     // Provider or proxy diagnostics may contain credentials. Only expose a
     // bounded status; a model request is never replayed by this client.
-    if (response.status === 401) throw new SignInRequired("AgentOS sign-in expired or was revoked. Run `/login` in the terminal or `agentos-code login`.")
+    if (response.status === 401) throw new SignInRequired("AgentOS sign-in expired or was revoked. Run `/login` in the terminal or `omnicode login`.")
     if (response.status === 402) throw new Error("Your AgentOS workspace is out of credits. Open Usage in AgentOS.")
     if (response.status === 403) throw new Error("Your AgentOS account does not have permission for this action.")
-    if (response.status === 404) throw new Error("This AgentOS server needs the AgentOS Code API update.")
+    if (response.status === 404) throw new Error("This AgentOS server needs the OmniCode API update.")
     throw new Error(`AgentOS request failed (HTTP ${response.status}).`)
   }
   return response.json()
@@ -131,7 +131,7 @@ export async function login(input: {
     const redirect = `http://127.0.0.1:${server.port}/callback`
     const registration = z.object({ client_id: z.string() }).parse(await jsonRequest(metadata.registration_endpoint, {
       method: "POST", headers: { "Content-Type": "application/json" }, signal,
-      body: JSON.stringify({ client_name: "AgentOS Code", redirect_uris: [redirect], token_endpoint_auth_method: "none" }),
+      body: JSON.stringify({ client_name: "OmniCode", redirect_uris: [redirect], token_endpoint_auth_method: "none" }),
     }))
     const authorization = new URL(metadata.authorization_endpoint)
     authorization.search = new URLSearchParams({

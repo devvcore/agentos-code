@@ -1,8 +1,45 @@
 import { execFile, spawn } from "node:child_process"
 import { promisify } from "node:util"
 import type { AgentOSAccount, AgentOSStartup } from "@opencode-ai/app/agentos"
+import type { AgentOSDictation, AgentOSDictationResult } from "@opencode-ai/app/agentos"
 
 const execute = promisify(execFile)
+
+export function transcribeAgentOSAudio(binary: string, input: AgentOSDictation): Promise<AgentOSDictationResult> {
+  if (
+    !(input?.audio instanceof ArrayBuffer) ||
+    !input.audio.byteLength ||
+    input.audio.byteLength > 25 * 1024 * 1024 ||
+    !/^audio\/(webm|wav|x-wav|mp4|mpeg|ogg)(;.*)?$/.test(input.type) ||
+    !/^[a-zA-Z0-9-]{1,100}$/.test(input.id)
+  ) {
+    return Promise.resolve({ ok: false, reason: "invalid" })
+  }
+  return new Promise((resolve) => {
+    // The bundled CLI owns the saved AgentOS login. Audio stays in memory and
+    // only the bounded transcript crosses back into the renderer.
+    const child = execFile(
+      binary,
+      ["transcribe", "--stdin", "--type", input.type, "--id", input.id],
+      { timeout: 65_000, maxBuffer: 256 * 1024 },
+      (error, stdout) => {
+        if (error) return resolve({ ok: false, reason: "failed" })
+        try {
+          const value = JSON.parse(stdout)
+          if (value.ok === true && typeof value.text === "string" && value.text.length <= 50_000) {
+            return resolve({ ok: true, text: value.text })
+          }
+          const reason = ["auth", "credits", "empty", "invalid"].includes(value.reason) ? value.reason : "failed"
+          resolve({ ok: false, reason })
+        } catch {
+          resolve({ ok: false, reason: "failed" })
+        }
+      },
+    )
+    child.stdin?.on("error", () => {})
+    child.stdin?.end(Buffer.from(input.audio))
+  })
+}
 
 export async function readAgentOSAccount(binary: string) {
   const { stdout } = await execute(binary, ["whoami", "--json"], { timeout: 20_000, maxBuffer: 64 * 1024 })

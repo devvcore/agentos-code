@@ -27,7 +27,7 @@ export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
                 fill="currentColor"
                 opacity="0.7"
               >
-                AgentOS Code
+                omnicode
               </text>
             ) : (
               <>
