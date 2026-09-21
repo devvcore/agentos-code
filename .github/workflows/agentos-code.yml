@@ -1,5 +1,12 @@
 name: AgentOS Code
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build for the Linux download
+        required: true
+        default: '0.1.1'
+        type: string
   push:
     branches: [codex/agentos-code]
   pull_request:
@@ -20,19 +27,23 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile --ignore-scripts
-      - run: bun test test/agentos test/session/retry.test.ts
+      - run: bun test test/agentos test/mcp/catalog.test.ts test/session/retry.test.ts
+        if: github.event_name != 'workflow_dispatch'
         working-directory: packages/opencode
       - run: bun run typecheck
+        if: github.event_name != 'workflow_dispatch'
         working-directory: packages/opencode
       - run: bun run typecheck
+        if: github.event_name != 'workflow_dispatch'
         working-directory: packages/core
       - run: bun run typecheck
+        if: github.event_name != 'workflow_dispatch'
         working-directory: packages/tui
       - run: bun run script/build.ts --agentos --single --skip-install --skip-embed-web-ui
         working-directory: packages/opencode
         env:
           OPENCODE_CHANNEL: agentos
-          OPENCODE_VERSION: 0.1.0
+          OPENCODE_VERSION: ${{ inputs.version || '0.1.1' }}
       - uses: actions/upload-artifact@v4
         with:
           name: agentos-code-linux-x64

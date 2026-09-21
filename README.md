@@ -4,7 +4,15 @@ A fork of [OpenCode](https://github.com/anomalyco/opencode) for coding in AgentO
 
 ## Install
 
-[Download AgentOS Code 0.1.0](https://github.com/devvcore/agentos-code/releases/tag/v0.1.0) for macOS Apple Silicon or Linux x64. Verify the file against `SHA256SUMS`, make it executable, and place it on your PATH as `agentos-code`. Run `agentos-code` in your project to sign in and start.
+[Install AgentOS Code](https://tryagentos.net/code) for macOS Apple Silicon or Linux x64:
+
+```sh
+curl -fsSL https://tryagentos.net/code/install.sh | bash
+```
+
+The installer verifies the release checksum, installs `agentos-code` in `~/.local/bin`, and adds that directory to your Bash or Zsh PATH if needed. Open a new terminal if the installer updated your PATH, then run `agentos-code` in your project. Your browser opens automatically for AgentOS sign-in.
+
+[Direct downloads and checksums](https://github.com/devvcore/agentos-code/releases/tag/v0.1.1) are also available. Set `AGENTOS_CODE_INSTALL_DIR` for a custom destination, or `AGENTOS_CODE_NO_MODIFY_PATH=1` to leave your shell profile unchanged.
 
 ### Build from source
 
@@ -62,7 +70,7 @@ cd packages/opencode
 bun run agentos --help
 bun test test/agentos
 bun run typecheck
-OPENCODE_CHANNEL=agentos OPENCODE_VERSION=0.1.0 bun run build:agentos --single --skip-install --skip-embed-web-ui
+OPENCODE_CHANNEL=agentos OPENCODE_VERSION=0.1.1 bun run build:agentos --single --skip-install --skip-embed-web-ui
 ```
 
 The AgentOS integration suite exercises the real compiled CLI, file tools, session resume, token binding and ledger settlement against a controlled model response. Live provider and production deployment checks remain separate.

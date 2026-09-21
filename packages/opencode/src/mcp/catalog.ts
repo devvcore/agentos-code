@@ -72,11 +72,15 @@ export function convertTool(mcpTool: MCPToolDef, client: Client, timeout?: numbe
             .filter((text) => text.trim())
             .join("\n\n") || "MCP tool returned an error",
         )
-      if (result.content.length > 0 || result.structuredContent === undefined || result.structuredContent === null)
-        return result
+      if (result.structuredContent === undefined || result.structuredContent === null) return result
+      // Session tools consume content, not structuredContent. Servers may put
+      // only a short summary in content, so always carry the actual data into
+      // the model's tool result while preserving images and other attachments.
+      const structured = JSON.stringify(result.structuredContent)
+      if (result.content.some((item) => item.type === "text" && item.text === structured)) return result
       return {
         ...result,
-        content: [{ type: "text" as const, text: JSON.stringify(result.structuredContent) }],
+        content: [...result.content, { type: "text" as const, text: structured }],
       }
     },
   })

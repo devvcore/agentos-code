@@ -27,17 +27,20 @@ function mcpTool() {
 }
 
 describe("McpCatalog.convertTool", () => {
-  test("preserves content when structuredContent is also present", async () => {
+  test("preserves attachments while exposing structured data to the model", async () => {
     const content = [{ type: "image" as const, mimeType: "image/png", data: "AAAA" }]
     const structuredContent = { image: { mimeType: "image/png", data: "AAAA" } }
     const converted = McpCatalog.convertTool(mcpTool(), clientReturning({ content, structuredContent }))
 
     const output = await converted.execute?.({}, options)
 
-    expect(output).toMatchObject({ content, structuredContent })
+    expect(output).toMatchObject({
+      content: [...content, { type: "text", text: JSON.stringify(structuredContent) }],
+      structuredContent,
+    })
   })
 
-  test("falls back to structuredContent only when content is absent", async () => {
+  test("exposes structuredContent when content is absent", async () => {
     const structuredContent = { results: [{ title: "one" }] }
     const converted = McpCatalog.convertTool(mcpTool(), clientReturning({ content: [], structuredContent }))
 
@@ -47,6 +50,29 @@ describe("McpCatalog.convertTool", () => {
       structuredContent,
       content: [{ type: "text", text: JSON.stringify(structuredContent) }],
     })
+  })
+
+  test("AgentOS task data reaches the model even when a text placeholder is present", async () => {
+    const structuredContent = { tasks: [{ title: "Review the proposal", due_date: "2026-09-20" }] }
+    const content = [{ type: "text", text: "Structured result attached." }]
+    const converted = McpCatalog.convertTool(mcpTool(), clientReturning({ content, structuredContent }))
+    const output = await converted.execute?.({}, options)
+
+    expect(output.content.filter((item: { type: string }) => item.type === "text")
+      .map((item: { text: string }) => item.text).join("\n")).toContain("Review the proposal")
+  })
+
+  test("does not duplicate structured data already mirrored as JSON", async () => {
+    const structuredContent = { tasks: [] }
+    const content = [{ type: "text", text: JSON.stringify(structuredContent) }]
+    const converted = McpCatalog.convertTool(mcpTool(), clientReturning({ content, structuredContent }))
+    expect(await converted.execute?.({}, options)).toMatchObject({ content, structuredContent })
+  })
+
+  test("preserves ordinary text-only responses", async () => {
+    const content = [{ type: "text", text: "No results." }]
+    const converted = McpCatalog.convertTool(mcpTool(), clientReturning({ content }))
+    expect(await converted.execute?.({}, options)).toMatchObject({ content })
   })
 })
 
