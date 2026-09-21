@@ -13,4 +13,4 @@ destination=${AGENTOS_CODE_INSTALL_DIR:-"$HOME/.local/bin"}
 mkdir -p "$destination"
 install -m 755 "$source" "$destination/agentos-code"
 "$destination/agentos-code" --version
-printf 'Installed %s/agentos-code\nRun agentos-code login to sign in.\n' "$destination"
+printf 'Installed %s/agentos-code\nRun agentos-code in your project; sign-in opens automatically.\n' "$destination"

@@ -2,7 +2,11 @@
 
 A fork of [OpenCode](https://github.com/anomalyco/opencode) for coding in AgentOS and your terminal. Sign in with your AgentOS account; coding uses the same workspace credits and Usage ledger. Provider API keys stay on the AgentOS server.
 
-## Install from source
+## Install
+
+[Download AgentOS Code 0.1.0](https://github.com/devvcore/agentos-code/releases/tag/v0.1.0) for macOS Apple Silicon or Linux x64. Verify the file against `SHA256SUMS`, make it executable, and place it on your PATH as `agentos-code`. Run `agentos-code` in your project to sign in and start.
+
+### Build from source
 
 Requires Git and Bun 1.3.14. On macOS or Linux:
 
@@ -40,7 +44,7 @@ The server must include the AgentOS Code integration: `GET /inference/v1/account
 
 In AgentOS, create an Agent, open Advanced, and choose **AgentOS Code** as its framework. It uses the regular model picker and workspace credits, with no separate provider connection. The backend creates a scoped, revocable token bound to that agent; its model cannot be overridden by the CLI.
 
-Operators install the Linux binary in the execution environment and set `AGENTOS_CODE_CLI` to its absolute path. For existing sandbox execution, install it in the sandbox image and set `AGENTOS_CODE_SANDBOX_CLI` and a reachable HTTPS `AGENTOS_SELF_URL`. Availability is disabled when no runtime is installed. See the AgentOS repository's `docs/AGENTOS_CODE.md` for rollout and verification.
+Operators install the Linux binary in the execution environment and set `AGENTOS_CODE_CLI` to its absolute path. Hosted sandbox runs install the pinned, checksum-verified Linux release on first use. Set `AGENTOS_CODE_SANDBOX_CLI` only for a separately preinstalled binary; `AGENTOS_SELF_URL` must be reachable HTTPS. Local execution is unavailable without an installed runtime. See the AgentOS repository's `docs/AGENTOS_CODE.md` for rollout and verification.
 
 ## Account and permissions
 
