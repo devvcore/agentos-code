@@ -11,7 +11,6 @@ git clone https://github.com/devvcore/agentos-code.git
 cd agentos-code
 ./script/install-agentos.sh
 export PATH="$HOME/.local/bin:$PATH"
-agentos-code login
 cd /path/to/your/project
 agentos-code
 ```
@@ -27,7 +26,11 @@ agentos-code whoami --json
 agentos-code logout
 ```
 
-`login` opens the existing AgentOS sign-in and workspace consent flow with PKCE. The workspace approved there owns the usage. `logout` revokes the grant and removes the local credential; `logout --local` only removes the local file. To change workspace, sign out and sign in again, choosing it at consent.
+Opening `agentos-code` automatically starts browser sign-in when you are signed out or your saved login has expired. Coding stays unavailable until your AgentOS account is verified. Headless commands require an existing login or an explicit token.
+
+Inside the terminal, `/login` opens AgentOS sign-in, `/usage` shows your account and workspace credits, and `/logout` revokes the grant and exits. `/connect` remains an alias for `/login`. Stop any running task before switching accounts. The workspace approved in the browser owns the usage.
+
+The shell commands `login`, `usage`, and `logout` also work. `logout --local` only removes the local file. Sign-in uses the existing AgentOS workspace consent flow with PKCE.
 
 Use `login --url https://your-agentos.example/api` for a self-hosted server, or `--no-browser` to open the printed link manually on the same computer. Headless runs accept `AGENTOS_API_TOKEN` and `AGENTOS_URL`. Local development also supports `http://127.0.0.1:PORT` directly or an explicit `/api` proxy prefix.
 

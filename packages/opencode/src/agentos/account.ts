@@ -6,6 +6,7 @@ import { z } from "zod"
 
 export const Credential = z.object({ url: z.string(), token: z.string().startsWith("agentos_pat_") })
 export type Credential = z.infer<typeof Credential>
+export class SignInRequired extends Error {}
 export const Account = z.object({
   user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
   workspace: z.object({ id: z.string(), name: z.string() }),
@@ -33,9 +34,9 @@ export async function loadCredential(): Promise<Credential> {
     return Credential.parse({ url: apiURL(process.env.AGENTOS_URL), token: process.env.AGENTOS_API_TOKEN })
   }
   const file = Bun.file(credentialPath())
-  if (!(await file.exists())) throw new Error("Sign in with `agentos-code login` first.")
+  if (!(await file.exists())) throw new SignInRequired("Sign in with `agentos-code login` first.")
   const result = Credential.safeParse(await file.json().catch(() => null))
-  if (!result.success) throw new Error("AgentOS sign-in is invalid. Run `agentos-code login` again.")
+  if (!result.success) throw new SignInRequired("AgentOS sign-in is invalid. Run `agentos-code login` again.")
   const url = apiURL(result.data.url)
   if (process.env.AGENTOS_URL && apiURL(process.env.AGENTOS_URL) !== url) {
     throw new Error("This login belongs to another AgentOS server. Run `agentos-code login --url <url>`.")
@@ -60,7 +61,7 @@ export async function jsonRequest(url: string, init: RequestInit = {}): Promise<
   if (!response.ok) {
     // Provider or proxy diagnostics may contain credentials. Only expose a
     // bounded status; a model request is never replayed by this client.
-    if (response.status === 401) throw new Error("AgentOS sign-in expired or was revoked. Run `agentos-code login`.")
+    if (response.status === 401) throw new SignInRequired("AgentOS sign-in expired or was revoked. Run `/login` in the terminal or `agentos-code login`.")
     if (response.status === 402) throw new Error("Your AgentOS workspace is out of credits. Open Usage in AgentOS.")
     if (response.status === 403) throw new Error("Your AgentOS account does not have permission for this action.")
     if (response.status === 404) throw new Error("This AgentOS server needs the AgentOS Code API update.")

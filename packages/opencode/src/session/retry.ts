@@ -87,6 +87,13 @@ export function retryable(error: Err, provider: string) {
   if (SessionV1.ContextOverflowError.isInstance(error)) return undefined
   if (SessionV1.APIError.isInstance(error)) {
     const status = error.data.statusCode
+    if (provider === "agentos") {
+      const body = parseJSON(error.data.responseBody ?? "")
+      const detail = isRecord(body?.error) ? body.error : undefined
+      if (detail?.code === "inference_not_configured" || detail?.message === "AgentOS inference is not configured.")
+        return undefined
+      if (status === 401 || status === 402 || status === 403) return undefined
+    }
     // 5xx errors are transient server failures and should always be retried,
     // even when the provider SDK doesn't explicitly mark them as retryable.
     if (

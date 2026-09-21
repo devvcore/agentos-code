@@ -68,7 +68,9 @@ function parse(tip: string): TipPart[] {
   return parts
 }
 
-const NO_MODELS_TIP = "Run {highlight}/connect{/highlight} to add an AI provider and start coding"
+const NO_MODELS_TIP = process.env.AGENTOS_CODE
+  ? "Run {highlight}/login{/highlight} to sign in to AgentOS"
+  : "Run {highlight}/connect{/highlight} to add an AI provider and start coding"
 const NO_MODELS_PARTS = parse(NO_MODELS_TIP)
 
 function shortcutText(value: string) {
@@ -134,6 +136,15 @@ export function Tips(props: { api: TuiPluginApi; connected?: boolean }) {
   }
   const tip = createMemo(() => {
     if (props.connected === false) return NO_MODELS_TIP
+    if (process.env.AGENTOS_CODE) {
+      const tips = [
+        "Use {highlight}/login{/highlight} to sign in with your AgentOS account",
+        "Use {highlight}/usage{/highlight} to check your workspace credits",
+        "Use {highlight}/logout{/highlight} to sign out and exit",
+        "Run {highlight}agentos-code run{/highlight} to send a coding task from your shell",
+      ]
+      return tips[Math.floor(tipOffset * tips.length)] ?? tips[0]
+    }
     const tips = [...TIPS, process.platform !== "win32" ? TERMINAL_SUSPEND_TIP : INPUT_UNDO_TIP].flatMap((item) => {
       const value = typeof item === "string" ? item : item(shortcuts)
       return value ? [value] : []

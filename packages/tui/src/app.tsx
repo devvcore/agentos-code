@@ -6,6 +6,8 @@ import { Global } from "@opencode-ai/core/global"
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { ClipboardProvider, useClipboard } from "./context/clipboard"
+import { AgentOSProvider, type AgentOSAccount, useAgentOS } from "./context/agentos"
+import { agentosError } from "./component/dialog-agentos"
 import { ExitProvider, useExit } from "./context/exit"
 import { EpilogueProvider } from "./context/epilogue"
 import * as Selection from "./util/selection"
@@ -140,6 +142,7 @@ const appBindingCommands = [
 ] as const
 
 export type TuiInput = {
+  agentos?: AgentOSAccount
   url: string
   args: Args
   config: TuiConfig.Resolved
@@ -278,69 +281,71 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
                           skipInitialLoading: Boolean(process.env.OPENCODE_FAST_BOOT),
                         }}
                       >
-                        <ClipboardProvider>
-                          <OpencodeKeymapProvider keymap={keymap}>
-                            <ArgsProvider {...input.args}>
-                              <KVProvider>
-                                <ToastProvider>
-                                  <RouteProvider
-                                    initialRoute={
-                                      input.args.continue
-                                        ? {
-                                            type: "session",
-                                            sessionID: "dummy",
-                                          }
-                                        : undefined
-                                    }
-                                  >
-                                    <TuiConfigProvider config={input.config}>
-                                      <PluginRuntimeProvider value={pluginRuntime}>
-                                        <SDKProvider
-                                          url={input.url}
-                                          directory={input.directory}
-                                          fetch={input.fetch}
-                                          headers={input.headers}
-                                          events={input.events}
-                                        >
-                                          <PermissionProvider>
-                                            <ProjectProvider>
-                                              <SyncProvider>
-                                                <DataProvider>
-                                                  <ThemeProvider mode={mode}>
-                                                    <LocalProvider>
-                                                      <PromptStashProvider>
-                                                        <DialogProvider>
-                                                          <FrecencyProvider>
-                                                            <PromptHistoryProvider>
-                                                              <PromptRefProvider>
-                                                                <EditorContextProvider>
-                                                                  <LocationProvider>
-                                                                    <App
-                                                                      onSnapshot={input.onSnapshot}
-                                                                      pluginHost={input.pluginHost}
-                                                                    />
-                                                                  </LocationProvider>
-                                                                </EditorContextProvider>
-                                                              </PromptRefProvider>
-                                                            </PromptHistoryProvider>
-                                                          </FrecencyProvider>
-                                                        </DialogProvider>
-                                                      </PromptStashProvider>
-                                                    </LocalProvider>
-                                                  </ThemeProvider>
-                                                </DataProvider>
-                                              </SyncProvider>
-                                            </ProjectProvider>
-                                          </PermissionProvider>
-                                        </SDKProvider>
-                                      </PluginRuntimeProvider>
-                                    </TuiConfigProvider>
-                                  </RouteProvider>
-                                </ToastProvider>
-                              </KVProvider>
-                            </ArgsProvider>
-                          </OpencodeKeymapProvider>
-                        </ClipboardProvider>
+                        <AgentOSProvider value={input.agentos}>
+                          <ClipboardProvider>
+                            <OpencodeKeymapProvider keymap={keymap}>
+                              <ArgsProvider {...input.args}>
+                                <KVProvider>
+                                  <ToastProvider>
+                                    <RouteProvider
+                                      initialRoute={
+                                        input.args.continue
+                                          ? {
+                                              type: "session",
+                                              sessionID: "dummy",
+                                            }
+                                          : undefined
+                                      }
+                                    >
+                                      <TuiConfigProvider config={input.config}>
+                                        <PluginRuntimeProvider value={pluginRuntime}>
+                                          <SDKProvider
+                                            url={input.url}
+                                            directory={input.directory}
+                                            fetch={input.fetch}
+                                            headers={input.headers}
+                                            events={input.events}
+                                          >
+                                            <PermissionProvider>
+                                              <ProjectProvider>
+                                                <SyncProvider>
+                                                  <DataProvider>
+                                                    <ThemeProvider mode={mode}>
+                                                      <LocalProvider>
+                                                        <PromptStashProvider>
+                                                          <DialogProvider>
+                                                            <FrecencyProvider>
+                                                              <PromptHistoryProvider>
+                                                                <PromptRefProvider>
+                                                                  <EditorContextProvider>
+                                                                    <LocationProvider>
+                                                                      <App
+                                                                        onSnapshot={input.onSnapshot}
+                                                                        pluginHost={input.pluginHost}
+                                                                      />
+                                                                    </LocationProvider>
+                                                                  </EditorContextProvider>
+                                                                </PromptRefProvider>
+                                                              </PromptHistoryProvider>
+                                                            </FrecencyProvider>
+                                                          </DialogProvider>
+                                                        </PromptStashProvider>
+                                                      </LocalProvider>
+                                                    </ThemeProvider>
+                                                  </DataProvider>
+                                                </SyncProvider>
+                                              </ProjectProvider>
+                                            </PermissionProvider>
+                                          </SDKProvider>
+                                        </PluginRuntimeProvider>
+                                      </TuiConfigProvider>
+                                    </RouteProvider>
+                                  </ToastProvider>
+                                </KVProvider>
+                              </ArgsProvider>
+                            </OpencodeKeymapProvider>
+                          </ClipboardProvider>
+                        </AgentOSProvider>
                       </TuiStartupProvider>
                     </TuiTerminalEnvironmentProvider>
                   </TuiPathsProvider>
@@ -365,6 +370,7 @@ export const run = Effect.fn("Tui.run")(function* (input: TuiInput) {
 })
 
 function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPluginHost }) {
+  const agentos = useAgentOS()
   const startup = useTuiStartup()
   const tuiConfig = useTuiConfig()
   const route = useRoute()
@@ -456,14 +462,14 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     if (!terminalTitleEnabled() || Flag.OPENCODE_DISABLE_TERMINAL_TITLE) return
 
     if (route.data.type === "home") {
-      renderer.setTerminalTitle("OpenCode")
+      renderer.setTerminalTitle(agentos ? "AgentOS Code" : "OpenCode")
       return
     }
 
     if (route.data.type === "session") {
       const session = sync.session.get(route.data.sessionID)
       if (!session || isDefaultTitle(session.title)) {
-        renderer.setTerminalTitle("OpenCode")
+        renderer.setTerminalTitle(agentos ? "AgentOS Code" : "OpenCode")
         return
       }
 
@@ -739,14 +745,52 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
       },
       {
         name: "provider.connect",
-        title: "Connect provider",
+        title: agentos ? "Sign in to AgentOS" : "Connect provider",
         suggested: !connected(),
-        slashName: "connect",
+        slashName: agentos ? "login" : "connect",
+        slashAliases: agentos ? ["connect"] : undefined,
         run: () => {
           dialog.replace(() => <DialogProviderList />)
         },
         category: "Provider",
       },
+      ...(agentos
+        ? [
+            {
+              name: "agentos.usage",
+              title: "AgentOS account and usage",
+              slashName: "usage",
+              slashAliases: ["whoami"],
+              category: "Provider",
+              run: async () => {
+                try {
+                  const message = await agentos.usage()
+                  dialog.replace(() => <DialogAlert title="AgentOS usage" message={message} />)
+                } catch (error) {
+                  toast.show({ message: agentosError(error), variant: "error" })
+                }
+              },
+            },
+            {
+              name: "agentos.logout",
+              title: "Sign out of AgentOS and exit",
+              slashName: "logout",
+              category: "Provider",
+              run: async () => {
+                if (Object.values(sync.data.session_status).some((status) => status.type !== "idle")) {
+                  toast.show({ message: "Stop the running task before signing out.", variant: "error" })
+                  return
+                }
+                try {
+                  await agentos.logout()
+                  exit()
+                } catch (error) {
+                  toast.show({ message: agentosError(error), variant: "error" })
+                }
+              },
+            },
+          ]
+        : []),
       ...(sync.data.console_state.switchableOrgCount > 1
         ? [
             {
@@ -1021,6 +1065,10 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
     if (workspace !== project.workspace.current()) return
     const error = evt.properties.error
     if (error && typeof error === "object" && error.name === "MessageAbortedError") return
+    if (agentos && error?.name === "APIError" && error.data.statusCode === 401) {
+      dialog.replace(() => <DialogProviderList />)
+      return
+    }
     const message = errorMessage(error)
 
     toast.show({

@@ -10,6 +10,7 @@ import { Heap } from "@/cli/heap"
 import { AppRuntime } from "@/effect/app-runtime"
 import { Effect } from "effect"
 import { disposeAllInstancesAndEmitGlobalDisposed } from "@/server/global-lifecycle"
+import { applySession, type PreparedAccount } from "@/agentos/session"
 
 Heap.start()
 
@@ -28,6 +29,14 @@ GlobalBus.on("event", (event) => {
 let server: Awaited<ReturnType<typeof Server.listen>> | undefined
 
 export const rpc = {
+  async agentosConfigure(input: PreparedAccount) {
+    if (!process.env.AGENTOS_CODE) throw new Error("AgentOS sign-in is unavailable.")
+    // Dispose clients holding the old credential before constructing any with
+    // the new account. The disposed event makes the terminal reload providers.
+    await InstanceRuntime.disposeAllInstances()
+    applySession(input)
+    await rpc.reload()
+  },
   async fetch(input: { url: string; method: string; headers: Record<string, string>; body?: string }) {
     const headers = { ...input.headers }
     const auth = ServerAuth.header()

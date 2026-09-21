@@ -15,6 +15,8 @@ import { isConsoleManagedProvider } from "../util/provider-origin"
 import { useConnected } from "./use-connected"
 import { useBindings } from "../keymap"
 import { useClipboard } from "../context/clipboard"
+import { useAgentOS } from "../context/agentos"
+import { DialogAgentOSLogin } from "./dialog-agentos"
 
 const PROVIDER_PRIORITY: Record<string, number> = {
   opencode: 0,
@@ -226,6 +228,7 @@ export function createDialogProviderOptions() {
 }
 
 export function DialogProvider() {
+  if (useAgentOS()) return <DialogAgentOSLogin />
   const options = createDialogProviderOptions()
   return <DialogSelect title="Connect a provider" options={options()} />
 }

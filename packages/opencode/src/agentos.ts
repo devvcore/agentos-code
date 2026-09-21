@@ -1,25 +1,30 @@
 import { rm } from "node:fs/promises"
 import { parseArgs } from "node:util"
-import { account, apiURL, authenticated, credentialPath, loadCredential, login, saveCredential } from "./agentos/account"
-import { configuration } from "./agentos/config"
+import { account, authenticated, credentialPath, loadCredential } from "./agentos/account"
+import { applySession, isInteractive, requireAccount, signIn } from "./agentos/session"
 
 process.env.AGENTOS_CODE = "1"
 const args = process.argv.slice(2)
+if (process.env.AGENTOS_API_TOKEN) process.env.AGENTOS_CODE_EXTERNAL_TOKEN = "1"
+else delete process.env.AGENTOS_CODE_EXTERNAL_TOKEN
+
+async function openSignIn(url: string, noBrowser = false) {
+  console.log("Sign in to AgentOS to start coding:\n" + url)
+  if (noBrowser) return
+  const { default: open } = await import("open")
+  await open(url).catch(() => console.log("Open the link above in your browser to finish signing in."))
+}
 
 try {
   if (args[0] === "login") {
     const options = parseArgs({ args: args.slice(1), options: { url: { type: "string" }, "no-browser": { type: "boolean" } } })
-    const credential = await login({
+    const session = await signIn({
       url: options.values.url || process.env.AGENTOS_URL || "https://tryagentos.net",
       async open(url) {
-        console.log("Sign in to AgentOS:\n" + url)
-        if (options.values["no-browser"]) return
-        const { default: open } = await import("open")
-        await open(url).catch(() => console.log("Open the link above in your browser to finish signing in."))
+        await openSignIn(url, options.values["no-browser"])
       },
     })
-    await saveCredential(credential)
-    const result = await account(credential)
+    const result = session.details
     console.log(`Signed in as ${result.user.email}\nWorkspace: ${result.workspace.name}\nCredits: ${result.credits.balance}`)
   } else if (args[0] === "logout") {
     const options = parseArgs({ args: args.slice(1), options: { local: { type: "boolean" } } })
@@ -50,6 +55,7 @@ try {
   agentos-code models                   List AgentOS coding models
 
 Use AGENTOS_MODEL to choose a model. AgentOS handles usage and credits.
+Opening the terminal starts browser sign-in if needed. Inside it, use /login, /usage, or /logout.
 Hosted runs can use AGENTOS_API_TOKEN and AGENTOS_URL without browser login.
 Append --help to an OpenCode command for its options.`)
   } else if (["upgrade", "uninstall", "providers", "debug", "auth"].includes(args[0])) {
@@ -61,16 +67,7 @@ Append --help to an OpenCode command for its options.`)
     // Set the account before importing any runtime module: global paths and
     // worker environment are captured during OpenCode module initialization.
     if (!args.includes("--help") && !args.includes("-h") && !args.includes("--version") && !args.includes("-v")) {
-      const credential = await loadCredential()
-      const result = await account(credential)
-      process.env.AGENTOS_API_TOKEN = credential.token
-      process.env.AGENTOS_URL = apiURL(credential.url)
-      process.env.AGENTOS_CODE_CONFIG = JSON.stringify(await configuration(credential, process.env.AGENTOS_MODEL || result.default_model))
-      process.env.OPENCODE_CONFIG_CONTENT = process.env.AGENTOS_CODE_CONFIG
-      process.env.OPENCODE_DISABLE_CLAUDE_CODE = "true"
-      process.env.OPENCODE_PURE = "1"
-      process.env.OPENCODE_DISABLE_AUTOUPDATE = "true"
-      process.env.OPENCODE_DISABLE_SHARE = "true"
+      applySession(await requireAccount({ interactive: await isInteractive(args), open: openSignIn }))
     }
     await import("./index")
   }

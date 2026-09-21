@@ -16,6 +16,26 @@ import { ProviderV2 } from "@opencode-ai/core/provider"
 
 const providerID = ProviderV2.ID.make("test")
 const retryProvider = "test"
+
+test("AgentOS configuration and account failures stop while transient failures still retry", () => {
+  for (const detail of [
+    { code: "inference_not_configured", message: "Ask an administrator to enable coding." },
+    { code: "503", message: "AgentOS inference is not configured." },
+  ]) {
+    const error = new SessionV1.APIError({
+      message: detail.message,
+      statusCode: 503,
+      isRetryable: true,
+      responseBody: JSON.stringify({ error: detail }),
+    }).toObject()
+    expect(SessionRetry.retryable(error, "agentos")).toBeUndefined()
+    expect(SessionRetry.retryable(error, "other-provider")).toBeDefined()
+  }
+  for (const statusCode of [401, 402, 403, 503]) {
+    const error = new SessionV1.APIError({ message: "Unavailable", statusCode, isRetryable: true }).toObject()
+    expect(Boolean(SessionRetry.retryable(error, "agentos"))).toBe(statusCode === 503)
+  }
+})
 const it = testEffect(LayerNode.compile(LayerNode.group([SessionStatus.node, CrossSpawnSpawner.node])))
 
 function apiError(headers?: Record<string, string>): SessionV1.APIError {

@@ -6,7 +6,7 @@ on:
     paths:
       - 'packages/opencode/**'
       - 'packages/core/src/global.ts'
-      - 'packages/tui/src/component/logo.tsx'
+      - 'packages/tui/**'
       - 'script/install-agentos.sh'
       - '.github/workflows/agentos-code.yml'
 permissions:
@@ -20,7 +20,7 @@ jobs:
         with:
           bun-version: 1.3.14
       - run: bun install --frozen-lockfile --ignore-scripts
-      - run: bun test test/agentos
+      - run: bun test test/agentos test/session/retry.test.ts
         working-directory: packages/opencode
       - run: bun run typecheck
         working-directory: packages/opencode
@@ -33,3 +33,8 @@ jobs:
         env:
           OPENCODE_CHANNEL: agentos
           OPENCODE_VERSION: 0.1.0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentos-code-linux-x64
+          path: packages/opencode/dist/agentos-code-linux-x64/bin/agentos-code
+          retention-days: 14

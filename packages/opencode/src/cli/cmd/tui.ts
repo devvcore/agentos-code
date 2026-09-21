@@ -270,8 +270,14 @@ export const TuiThreadCommand = cmd({
         const { Effect } = await import("effect")
         const { run } = await import("../tui/layer")
         const { createLegacyTuiPluginHost } = await import("@/plugin/tui/runtime")
+        const agentos = process.env.AGENTOS_CODE
+          ? (await import("@/agentos/session")).terminalAccount(async (result) => {
+              await client.call("agentosConfigure", result)
+            })
+          : undefined
         await Effect.runPromise(
           run({
+            agentos,
             url: transport.url,
             async onSnapshot() {
               const tui = writeHeapSnapshot("tui.heapsnapshot")
