@@ -17,12 +17,10 @@ export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
             {import.meta.env.VITE_AGENTOS_CODE === "1" ? (
               <text
                 x="360"
-                y="100"
+                y="110"
                 text-anchor="middle"
-                textLength="720"
-                lengthAdjust="spacingAndGlyphs"
-                font-family="sans-serif"
-                font-size="100"
+                font-family="Inter, sans-serif"
+                font-size="136"
                 font-weight="600"
                 fill="currentColor"
                 opacity="0.7"

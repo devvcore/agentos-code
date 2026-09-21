@@ -37,7 +37,7 @@ export const Logo = (props: { class?: string }) => {
   if (import.meta.env.VITE_AGENTOS_CODE === "1")
     return (
       <svg class={props.class} viewBox="0 0 180 42" fill="var(--icon-strong-base)" aria-label="OmniCode">
-        <text x="0" y="32" font-size="32" font-family="sans-serif" font-weight="600">
+        <text x="0" y="32" font-size="32" font-family="Inter, sans-serif" font-weight="600">
           omnicode
         </text>
       </svg>
