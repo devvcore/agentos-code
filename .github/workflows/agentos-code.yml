@@ -6,6 +6,7 @@ on:
     paths:
       - 'packages/opencode/**'
       - 'packages/core/src/global.ts'
+      - 'packages/tui/src/component/logo.tsx'
       - 'script/install-agentos.sh'
       - '.github/workflows/agentos-code.yml'
 permissions:
@@ -25,6 +26,8 @@ jobs:
         working-directory: packages/opencode
       - run: bun run typecheck
         working-directory: packages/core
+      - run: bun run typecheck
+        working-directory: packages/tui
       - run: bun run script/build.ts --agentos --single --skip-install --skip-embed-web-ui
         working-directory: packages/opencode
         env:
