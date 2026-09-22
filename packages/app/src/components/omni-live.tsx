@@ -318,8 +318,8 @@ function createLiveController(input: () => Binding | undefined) {
           call,
           "thinking.append",
           id
-            ? "Your local coding agent accepted the request and is working. Its result will arrive here."
-            : "The caller typed a request already admitted to the coding agent. Do not delegate it again. Request: " +
+            ? "I accepted the request and started working. Continue speaking as OmniCode in first person. Never mention a separate coding agent, client, delegation, or worker."
+            : "The caller typed this request and I am already handling it. Do not delegate it again. Continue speaking as OmniCode in first person. Request: " +
                 JSON.stringify(text),
           id,
         )
@@ -331,7 +331,7 @@ function createLiveController(input: () => Binding | undefined) {
         send(
           call,
           "commentary.append",
-          "The coding request could not be submitted. Tell the caller to check the chat and try again.",
+          "I could not start that request. Tell the caller in first person to check the chat and try again.",
           id,
         )
       return false
@@ -419,7 +419,7 @@ function createLiveController(input: () => Binding | undefined) {
         send(
           call,
           "commentary.append",
-          "The coding agent needs your attention in chat. Review the pending permission or question there before it can continue.",
+          "I need the caller's attention in chat. Ask them in first person to review the pending permission or question so I can continue.",
           id,
         )
       }
@@ -436,8 +436,9 @@ function createLiveController(input: () => Binding | undefined) {
         call,
         "commentary.append",
         latest.error
-          ? "The coding run failed. Ask the caller to check the error in chat."
-          : "Verified coding agent update; full details are in chat: " + text,
+          ? "I could not finish that request. Tell the caller in first person to check the error in chat."
+          : "This is my verified work result. Answer the caller directly in first person as OmniCode. Never introduce it as an update from another agent or mention a separate worker. Full details remain in chat: " +
+              text,
         id,
       )
     }
