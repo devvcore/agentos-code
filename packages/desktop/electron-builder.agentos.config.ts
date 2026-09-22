@@ -4,7 +4,8 @@ import { join } from "node:path"
 import { promisify } from "node:util"
 
 const local = process.env.AGENTOS_ALLOW_ADHOC === "1"
-if (!local && !process.env.CSC_NAME?.startsWith("Developer ID Application: ")) {
+const signingIdentity = process.env.CSC_NAME?.replace(/^Developer ID Application:\s*/, "")
+if (!local && !signingIdentity) {
   throw new Error("Set CSC_NAME to a Developer ID Application identity, or AGENTOS_ALLOW_ADHOC=1 for a local build.")
 }
 
@@ -40,7 +41,7 @@ const config: Configuration = {
   mac: {
     category: "public.app-category.developer-tools",
     icon: "resources/icons/icon.icns",
-    identity: local ? null : process.env.CSC_NAME,
+    identity: local ? null : signingIdentity,
     hardenedRuntime: !local,
     entitlements: "resources/entitlements.plist",
     entitlementsInherit: "resources/entitlements.plist",

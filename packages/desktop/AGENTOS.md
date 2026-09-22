@@ -1,4 +1,4 @@
-# OmniCode desktop preview
+# OmniCode desktop
 
 The Electron app and CLI share the OmniCode login. Desktop bundles its own
 compiled CLI, starts it on authenticated loopback, and opens browser sign-in when
@@ -51,11 +51,13 @@ The default version is `0.2.0-preview.1`; set `AGENTOS_VERSION` consistently for
 both build and package commands to override it. Local builds are ad-hoc signed
 for development on the build computer. They are not notarized public releases.
 
-For distribution, omit `AGENTOS_ALLOW_ADHOC`, set `CSC_NAME` to the full Developer
-ID Application identity, configure electron-builder's Apple notarization
-credentials, and run `bun run package:agentos`. Preserve the MIT license and
-upstream notices. Publish only after testing the signed artifact on a clean Mac.
+For distribution, omit `AGENTOS_ALLOW_ADHOC`, set `CSC_NAME` to the Developer ID
+Application identity name, configure electron-builder's Apple notarization
+credentials, and run `bun run package:agentos`. The optional
+`Developer ID Application:` prefix is normalized before electron-builder receives
+the name. Preserve the MIT license and upstream notices. Publish only after
+testing the signed artifact on a clean Mac.
 
 Automatic updating remains disabled until an AgentOS-owned signed release feed
 is configured. The public CLI installer at `/code/install.sh` continues to serve
-the stable CLI independently of this desktop preview.
+the stable CLI independently of the desktop app.
