@@ -17,6 +17,24 @@ The microphone records up to five minutes and inserts the transcript into the cu
 
 The prompt uses the actual MIT-licensed `voice-glow` and `border-beam` packages from Libraries.dev through a small React root inside the Solid composer. Their license ships in the app resources.
 
+## GPT Live
+
+The waveform button starts a spoken conversation through the existing AgentOS
+account and workspace credits. The composer becomes the call controls, with the
+same Libraries.dev VoiceBeam responding to microphone and assistant audio. The
+Voice tab beside Review shows both sides in the existing resizable panel.
+
+Mute the microphone, then hold Space to talk and release to mute again. Space
+keeps its normal behavior in text fields and on focused controls. Losing focus
+or hiding the app also releases push-to-talk. “Type a message” sends text through
+the same coding session during the call; unsent text returns to the draft when
+the call ends.
+
+Spoken and typed requests use ordinary prompt admission and existing approvals.
+The coding agent runs independently while GPT Live continues talking; ending a
+call stops its audio and usage, not the coding run. Credentials stay in a private
+CLI bridge process, and the renderer receives only call lifecycle results.
+
 ## Build on Apple Silicon macOS
 
 From this package, with Bun 1.3.14 installed:

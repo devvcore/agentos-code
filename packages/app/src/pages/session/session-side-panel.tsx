@@ -28,6 +28,7 @@ import type { FileDiffInfo } from "@opencode-ai/client/promise"
 import { ConstrainDragYAxis, getDraggableId } from "@/utils/solid-dnd"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 
+import { useOmniLive } from "@/components/omni-live"
 import FileTree from "@/components/file-tree"
 import { normalizeFileTreeV2Path } from "@/components/file-tree-v2-model"
 import { SessionContextUsage } from "@/components/session-context-usage"
@@ -90,6 +91,8 @@ export function SessionSidePanel(props: {
   const dialog = useDialog()
   const sdk = useSDK()
   const { sessionKey, tabs, view, params } = useSessionLayout()
+  const live = useOmniLive().call
+  const voice = () => live.hasVoice(sdk().scope, params.id)
   const projectDirectory = createMemo(() => sdk().directory)
 
   const isDesktop = createMediaQuery("(min-width: 768px)")
@@ -179,6 +182,7 @@ export function SessionSidePanel(props: {
     normalizeTab,
     review: reviewTab,
     hasReview: props.canReview,
+    voice,
     fileBrowser: () => !!props.fileBrowserState,
   })
   const contextOpen = tabState.contextOpen
@@ -238,7 +242,7 @@ export function SessionSidePanel(props: {
   })
   const fileBrowserVisible = createMemo(() => {
     const active = activeTab()
-    return active !== "review" && active !== "context" && active !== "empty"
+    return active !== "review" && active !== "context" && active !== "voice" && active !== "empty"
   })
   const openFileKeybind = createMemo(() => command.keybindParts("file.open"))
   const closeTabKeybind = createMemo(() => command.keybindParts("tab.close"))
@@ -361,6 +365,15 @@ export function SessionSidePanel(props: {
                                       <div>{props.reviewCount()}</div>
                                     </Show>
                                   </div>
+                                </Tabs.Trigger>
+                              </Show>
+                              <Show when={voice()}>
+                                <Tabs.Trigger
+                                  value="voice"
+                                  id="session-side-panel-voice-tab"
+                                  aria-controls="session-side-panel-voice-tabpanel"
+                                >
+                                  {language.t("omni.live.transcript")}
                                 </Tabs.Trigger>
                               </Show>
                               <Show when={contextOpen()}>
@@ -490,6 +503,16 @@ export function SessionSidePanel(props: {
                             </Tabs.Content>
                           </Show>
 
+                          <Show when={voice() && activeTab() === "voice"}>
+                            <Tabs.Content
+                              value="voice"
+                              id="session-side-panel-voice-tabpanel"
+                              aria-labelledby="session-side-panel-voice-tab"
+                              class="flex flex-col h-full min-h-0 overflow-hidden"
+                            >
+                              <live.Transcript />
+                            </Tabs.Content>
+                          </Show>
                           <Show when={activeTab() === "context"}>
                             <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
                               <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
@@ -556,7 +579,7 @@ export function SessionSidePanel(props: {
                             <Show when={props.reviewSidebarToggle}>
                               {(toggle) => (
                                 <div class="session-review-v2-sidebar-toggle-slot h-full shrink-0 sticky left-0 z-10 flex items-center justify-center bg-v2-background-bg-base">
-                                  {toggle()(activeTab() === SESSION_OPEN_FILE_TAB)}
+                                  {toggle()(activeTab() === SESSION_OPEN_FILE_TAB || activeTab() === "voice")}
                                 </div>
                               )}
                             </Show>
@@ -569,6 +592,15 @@ export function SessionSidePanel(props: {
                                 {props.hasReview()
                                   ? language.t("session.review.filesChanged", { count: props.reviewCount() })
                                   : language.t("session.tab.review")}
+                              </Tabs.Trigger>
+                            </Show>
+                            <Show when={voice()}>
+                              <Tabs.Trigger
+                                value="voice"
+                                id="session-side-panel-voice-tab"
+                                aria-controls="session-side-panel-voice-tabpanel"
+                              >
+                                {language.t("omni.live.transcript")}
                               </Tabs.Trigger>
                             </Show>
                             <Show when={contextOpen()}>
@@ -718,6 +750,16 @@ export function SessionSidePanel(props: {
                           </Tabs.Content>
                         </Show>
 
+                        <Show when={voice() && activeTab() === "voice"}>
+                          <Tabs.Content
+                            value="voice"
+                            id="session-side-panel-voice-tabpanel"
+                            aria-labelledby="session-side-panel-voice-tab"
+                            class="flex flex-col h-full min-h-0 overflow-hidden"
+                          >
+                            <live.Transcript />
+                          </Tabs.Content>
+                        </Show>
                         <Show when={activeTab() === "context"}>
                           <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
                             <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">

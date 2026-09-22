@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test"
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { readAgentOSAccount, startAgentOSRuntime } from "./agentos-runtime"
+import { createAgentOSLiveBridge, readAgentOSAccount, startAgentOSRuntime } from "./agentos-runtime"
 import type { AgentOSStartup } from "@opencode-ai/app/agentos"
 
 const directories: string[] = []
@@ -18,6 +18,35 @@ async function fixture(source: string) {
   await chmod(binary, 0o700)
   return { dir, binary }
 }
+
+test("live IPC multiplexes one credential-owning process and drains it on stop", async () => {
+  const file = await fixture(`
+    require("fs").writeFileSync(__filename + ".started", JSON.stringify(process.argv.slice(2)))
+    require("readline").createInterface({input: process.stdin}).on("line", line => {
+      const {sequence,input} = JSON.parse(line)
+      setTimeout(() => console.log(JSON.stringify({sequence,result:{ok:true,id:input.id||"call",phase:input.action}})), input.action==="start" ? 40 : 0)
+    }).on("close", () => require("fs").writeFileSync(__filename + ".ended", "ended"))
+  `)
+  const bridge = createAgentOSLiveBridge(file.binary)
+  const started = bridge.request({ action: "start", sdp: "offer", context: "test" })
+  const status = bridge.request({ action: "status", id: "call" })
+  expect(await status).toEqual({ ok: true, id: "call", phase: "status" })
+  expect(await started).toEqual({ ok: true, id: "call", phase: "start" })
+  expect(JSON.parse(await readFile(file.binary + ".started", "utf8"))).toEqual(["live-bridge"])
+  bridge.stop()
+  await Bun.sleep(50)
+  expect(await readFile(file.binary + ".ended", "utf8")).toBe("ended")
+})
+
+test("live IPC reports a crashed credential owner without hanging", async () => {
+  const file = await fixture("process.exit(1)")
+  const bridge = createAgentOSLiveBridge(file.binary)
+  expect(await bridge.request({ action: "start", sdp: "offer", context: "test" })).toEqual({
+    ok: false,
+    reason: "failed",
+  })
+  bridge.stop()
+})
 
 test("starts the bundled CLI with browser login and authenticated loopback, then stops its child", async () => {
   const file = await fixture(`

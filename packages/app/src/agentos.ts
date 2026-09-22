@@ -13,3 +13,10 @@ export type AgentOSDictation = { audio: ArrayBuffer; type: string; id: string }
 export type AgentOSDictationResult =
   | { ok: true; text: string }
   | { ok: false; reason: "auth" | "credits" | "empty" | "invalid" | "failed" }
+
+export type AgentOSLiveRequest =
+  | { action: "start"; sdp: string; context: string }
+  | { action: "status" | "end"; id: string }
+export type AgentOSLiveResult =
+  | { ok: true; id: string; sdp?: string; phase?: string; error?: string | null }
+  | { ok: false; reason: "auth" | "credits" | "conflict" | "failed" }
