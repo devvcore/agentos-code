@@ -1,9 +1,69 @@
 import { execFile, spawn } from "node:child_process"
 import { promisify } from "node:util"
+import { createInterface } from "node:readline"
+import type { AgentOSLiveRequest, AgentOSLiveResult } from "@opencode-ai/app/agentos"
 import type { AgentOSAccount, AgentOSStartup } from "@opencode-ai/app/agentos"
 import type { AgentOSDictation, AgentOSDictationResult } from "@opencode-ai/app/agentos"
 
 const execute = promisify(execFile)
+
+export function createAgentOSLiveBridge(binary: string) {
+  let child: ReturnType<typeof spawn> | undefined
+  let sequence = 0
+  const pending = new Map<number, (result: AgentOSLiveResult) => void>()
+  const fail = (owner: ReturnType<typeof spawn>) => {
+    if (child !== owner) return
+    child = undefined
+    for (const finish of pending.values()) finish({ ok: false, reason: "failed" })
+    pending.clear()
+  }
+  return {
+    request(input: AgentOSLiveRequest): Promise<AgentOSLiveResult> {
+      if (!input || !["start", "status", "end"].includes(input.action) || JSON.stringify(input).length > 100000) {
+        return Promise.resolve({ ok: false, reason: "failed" })
+      }
+      if (!child) {
+        child = spawn(binary, ["live-bridge"], { stdio: ["pipe", "pipe", "pipe"] })
+        const owner = child
+        child.on("error", () => fail(owner))
+        child.on("close", () => fail(owner))
+        child.stderr?.resume()
+        child.stdin?.on("error", () => {})
+        createInterface({ input: child.stdout! }).on("line", (line) => {
+          try {
+            if (line.length > 100000) return
+            const value = JSON.parse(line)
+            const finish = pending.get(value.sequence)
+            if (!finish) return
+            pending.delete(value.sequence)
+            finish(value.result)
+          } catch {
+            /* Malformed private-process output cannot expose diagnostics. */
+          }
+        })
+      }
+      const owner = child
+      const id = ++sequence
+      return new Promise((resolve) => {
+        const timeout = setTimeout(() => {
+          pending.delete(id)
+          owner.stdin?.end()
+          resolve({ ok: false, reason: "failed" })
+        }, 60000)
+        pending.set(id, (result) => {
+          clearTimeout(timeout)
+          resolve(result)
+        })
+        owner.stdin!.write(JSON.stringify({ sequence: id, input }) + "\n")
+      })
+    },
+    stop() {
+      // EOF lets the credential owner end the call and drain usage. A crashed
+      // renderer is also covered by the server's heartbeat timeout.
+      child?.stdin?.end()
+    },
+  }
+}
 
 export function transcribeAgentOSAudio(binary: string, input: AgentOSDictation): Promise<AgentOSDictationResult> {
   if (

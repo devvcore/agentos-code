@@ -48,7 +48,12 @@ export type ElectronAPI = {
     startup: () => Promise<AgentOSStartup>
     account: () => Promise<AgentOSAccount>
     logout: () => Promise<void>
-    transcribe: (input: import("@opencode-ai/app/agentos").AgentOSDictation) => Promise<import("@opencode-ai/app/agentos").AgentOSDictationResult>
+    live: (
+      input: import("@opencode-ai/app/agentos").AgentOSLiveRequest,
+    ) => Promise<import("@opencode-ai/app/agentos").AgentOSLiveResult>
+    transcribe: (
+      input: import("@opencode-ai/app/agentos").AgentOSDictation,
+    ) => Promise<import("@opencode-ai/app/agentos").AgentOSDictationResult>
   }
   killSidecar: () => Promise<void>
   installCli: () => Promise<string>

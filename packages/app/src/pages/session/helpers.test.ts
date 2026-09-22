@@ -106,6 +106,25 @@ describe("getTabReorderIndex", () => {
 })
 
 describe("createSessionTabs", () => {
+  test("keeps Voice separate from file previews and falls back when its call is unavailable", () => {
+    for (const voice of [true, false]) {
+      createRoot((dispose) => {
+        const result = createSessionTabs({
+          tabs: () => ({ active: () => "voice", all: () => ["voice"] }),
+          pathFromTab: () => undefined,
+          normalizeTab: (tab) => tab,
+          review: () => true,
+          hasReview: () => true,
+          voice: () => voice,
+        })
+        expect(result.activeTab()).toBe(voice ? "voice" : "review")
+        expect(result.panelTabs()).toEqual([])
+        expect(result.activeFileTab()).toBeUndefined()
+        dispose()
+      })
+    }
+  })
+
   test("normalizes the effective file tab", () => {
     createRoot((dispose) => {
       const [state] = createStore({

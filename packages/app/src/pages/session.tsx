@@ -1,3 +1,4 @@
+import { useOmniLive } from "@/components/omni-live"
 import type { FilePart, Project, UserMessage, VcsFileDiff } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
@@ -373,6 +374,7 @@ export default function Page() {
   const { params, sessionKey, workspaceKey, tabs, view } = useSessionLayout()
   const reviewMode = () => view().review.mode() ?? "git"
   const reviewFile = () => view().review.file()
+  const live = useOmniLive().call
   const sessionOwnership = createSessionOwnership(sessionKey)
   const newSessionDesign = createMemo(() => settings.general.newLayoutDesigns())
 
@@ -473,7 +475,10 @@ export default function Page() {
     ({ width }) => setPanelRowWidth(width),
   )
   const splitReview = createMemo(
-    () => (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) && layout.review.diffStyle() === "split",
+    () =>
+      (newSessionDesign() ? desktopV2ReviewOpen() : desktopReviewOpen()) &&
+      layout.review.diffStyle() === "split" &&
+      tabs().active() !== "voice",
   )
   // The observer reports the content-box width, which already excludes the row
   // padding; only the flex gap between the panels remains to subtract.
@@ -541,6 +546,7 @@ export default function Page() {
     normalizeTab,
     review: reviewTab,
     hasReview: canReview,
+    voice: () => live.hasVoice(sdk().scope, params.id),
   })
   const activeTab = tabState.activeTab
   const activeFileTab = tabState.activeFileTab

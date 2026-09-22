@@ -40,6 +40,7 @@ export type PromptInputControls = {
 }
 
 export interface PromptInputProps {
+  live?: import("../omni-live").OmniLive
   class?: string
   state?: PromptInputState
   history?: PromptInputHistory

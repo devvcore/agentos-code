@@ -52,6 +52,9 @@ try {
         ? "Local login removed. The token can still be revoked in AgentOS Settings."
         : "Signed out. The AgentOS token was revoked.",
     )
+  } else if (args[0] === "live-bridge") {
+    const { liveBridge } = await import("./agentos/live")
+    await liveBridge()
   } else if (args[0] === "transcribe") {
     const { transcribe, MAX_AUDIO_BYTES } = await import("./agentos/transcription")
     const options = parseArgs({

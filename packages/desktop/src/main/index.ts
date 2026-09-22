@@ -51,7 +51,13 @@ import { cleanupStoreFiles } from "./store-cleanup"
 import { startBackgroundCli } from "./background-cli"
 import { setNativeTranslations } from "./native-translations"
 
-import { readAgentOSAccount, revokeAgentOSAccount, startAgentOSRuntime, transcribeAgentOSAudio } from "./agentos-runtime"
+import {
+  createAgentOSLiveBridge,
+  readAgentOSAccount,
+  revokeAgentOSAccount,
+  startAgentOSRuntime,
+  transcribeAgentOSAudio,
+} from "./agentos-runtime"
 import type { AgentOSStartup } from "@opencode-ai/app/agentos"
 
 const agentosBinary = join(
@@ -290,13 +296,17 @@ const main = Effect.gen(function* () {
     checkForUpdates: () => void showUpdaterDialog(updater, true),
     relaunch,
   }
+  const liveBridge = createAgentOSLiveBridge(agentosBinary)
+  app.once("before-quit", () => liveBridge.stop())
   registerIpcHandlers({
     agentos: AGENTOS_CODE
       ? {
           startup: () => agentosStartup,
           account: () => readAgentOSAccount(agentosBinary),
+          live: (input) => liveBridge.request(input),
           transcribe: (input) => transcribeAgentOSAudio(agentosBinary, input),
           logout: async () => {
+            liveBridge.stop()
             await revokeAgentOSAccount(agentosBinary)
             await killSidecar()
             app.quit()

@@ -1,4 +1,5 @@
 import "@/index.css"
+import { OmniLiveProvider } from "@/components/omni-live"
 import * as Sentry from "@sentry/solid"
 import { I18nProvider } from "@opencode-ai/ui/context"
 import { DialogProvider } from "@opencode-ai/ui/context/dialog"
@@ -316,7 +317,9 @@ function SharedProviders(props: ParentProps) {
       <BodyDesignClass />
       <CommandProvider>
         <DesktopCommands />
-        <HighlightsProvider>{props.children}</HighlightsProvider>
+        <HighlightsProvider>
+          <OmniLiveProvider>{props.children}</OmniLiveProvider>
+        </HighlightsProvider>
       </CommandProvider>
     </>
   )

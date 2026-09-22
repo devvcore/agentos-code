@@ -6,7 +6,7 @@ import { Icon } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
-import { createEffect, createMemo, on, Show } from "solid-js"
+import { createEffect, createMemo, on, onCleanup, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
@@ -26,6 +26,7 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
 import { showToast } from "@/utils/toast"
+import { createOmniLive } from "./omni-live"
 import { createOmniDictation } from "./omni-dictation"
 import { PromptInputV2, type PromptInputV2Suggestion } from "@opencode-ai/session-ui/v2/prompt-input"
 import {
@@ -44,13 +45,17 @@ export type PromptInputV2ControllerProps = Omit<PromptInputProps, "class" | "sub
 export type PromptInputV2ComposerController = PromptInputV2Interaction & {
   readonly model: PromptInputProps["controls"]["model"]
   readonly dictationScope: unknown
+  readonly live: import("./omni-live").OmniLive
+  readonly controls: PromptInputProps["controls"]
 }
 
 export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
   const dialog = useDialog()
   const command = useCommand()
   const language = useLanguage()
+  const live = props.controller.live
   const dictation = createOmniDictation({
+    disabled: live.active,
     scope: () => props.controller.dictationScope,
     working: () => props.controller.view.submit.working?.() ?? false,
     insert: (text) => {
@@ -64,34 +69,54 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
     },
   })
 
+  createEffect(() => live.setDictating(dictation.busy()))
+  onCleanup(() => live.setDictating(false))
+  createEffect(
+    on(
+      live.active,
+      (active) => {
+        if (!active) requestAnimationFrame(() => props.controller.restoreFocus())
+      },
+      { defer: true },
+    ),
+  )
+
   return (
     <div class="flex flex-col gap-3">
-      <PromptInputV2
-        controller={props.controller}
-        borderUnderlay={props.borderUnderlay}
-        class={props.class}
-        voiceControl={<dictation.Controls />}
-        decoration={<dictation.Effects />}
-        submitDisabled={dictation.busy()}
-        variantControlVisible={!props.controller.model.loading}
-        attachKeybind={command.keybindParts("file.attach")}
-        attachShortcut={command.keybind("file.attach")}
-        modelControl={
-          <PromptInputV2ModelControl
-            loading={props.controller.model.loading}
-            paid={props.controller.model.paid}
-            title={language.t("command.model.choose")}
-            keybind={command.keybindParts("model.choose")}
-            model={props.controller.model.selection}
-            providerID={props.controller.model.selection.current()?.provider?.id}
-            modelName={props.controller.model.selection.current()?.name ?? language.t("dialog.model.select.title")}
-            onClose={props.controller.restoreFocus}
-            onUnpaidClick={() =>
-              dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controller.model.selection} />)
-            }
-          />
-        }
-      />
+      <Show when={!live.active()} fallback={<live.Panel />}>
+        <PromptInputV2
+          controller={props.controller}
+          borderUnderlay={props.borderUnderlay}
+          class={props.class}
+          voiceControl={
+            <div class="flex items-center gap-1 mr-3">
+              <dictation.Controls />
+              <live.Controls />
+            </div>
+          }
+          decoration={<dictation.Effects />}
+          submitDisabled={dictation.busy()}
+          variantControlVisible={!props.controller.model.loading}
+          attachKeybind={command.keybindParts("file.attach")}
+          attachShortcut={command.keybind("file.attach")}
+          modelControl={
+            <PromptInputV2ModelControl
+              loading={props.controller.model.loading}
+              paid={props.controller.model.paid}
+              title={language.t("command.model.choose")}
+              keybind={command.keybindParts("model.choose")}
+              model={props.controller.model.selection}
+              providerID={props.controller.model.selection.current()?.provider?.id}
+              modelName={props.controller.model.selection.current()?.name ?? language.t("dialog.model.select.title")}
+              onClose={props.controller.restoreFocus}
+              onUnpaidClick={() =>
+                dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controller.model.selection} />)
+              }
+            />
+          }
+        />
+      </Show>
+      <live.Failure />
       <Show when={dictation.error()}>
         <p role="alert" class="text-12-regular text-text-weak">
           {dictation.error()}
@@ -432,6 +457,10 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
   })
   Object.defineProperty(controller, "model", { get: () => props.controls.model })
+  const live =
+    props.live ?? createOmniLive({ controls: () => props.controls, worktree: () => props.newSessionWorktree })
+  Object.defineProperty(controller, "live", { get: () => live })
+  Object.defineProperty(controller, "controls", { get: () => props.controls })
   Object.defineProperty(controller, "dictationScope", { get: () => prompt.capture() })
 
   command.register("prompt-input", () => [

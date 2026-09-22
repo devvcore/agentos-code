@@ -62,6 +62,10 @@ export function registerIpcHandlers(deps: Deps) {
     ipcMain.handle("agentos-startup", () => deps.agentos!.startup())
     ipcMain.handle("agentos-account", () => deps.agentos!.account())
     ipcMain.handle("agentos-logout", () => deps.agentos!.logout())
+    ipcMain.handle("agentos-live", (event, input) => {
+      if (event.senderFrame !== event.sender.mainFrame) throw new Error("Invalid live sender")
+      return deps.agentos!.live(input)
+    })
     ipcMain.handle("agentos-transcribe", (event, input) => {
       if (event.senderFrame !== event.sender.mainFrame) throw new Error("Invalid dictation sender")
       return deps.agentos!.transcribe(input)
