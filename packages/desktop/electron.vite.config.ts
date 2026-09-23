@@ -7,6 +7,7 @@ const agentos = process.env.AGENTOS_CODE === "1"
 const OPENCODE_SERVER_DIST = "../opencode/dist/node"
 
 const channel = (() => {
+  if (agentos) return "prod"
   const raw = process.env.OPENCODE_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
   if (process.env.OPENCODE_CHANNEL === "latest") return "prod"

@@ -21,8 +21,8 @@ import { Identifier } from "@/utils/id"
 import { normalizeSessionInfo } from "@/utils/session"
 import type { PromptInputControls } from "./prompt-input/contracts"
 import { sendFollowupDraft } from "./prompt-input/submit"
+import { liveDelegationPrompt, type LiveCaption } from "./omni-live-prompt"
 
-type Caption = { role: "user" | "assistant"; text: string; start: number; end: number; sealed: boolean }
 type CodingRequest = { messageID: string; delegation?: string; delivered: boolean; blocked: boolean }
 type Connection = {
   directory: string
@@ -41,7 +41,7 @@ type Connection = {
   draft: ReturnType<Binding["prompt"]["capture"]>
   timer?: ReturnType<typeof setTimeout>
   started: number
-  captions: Caption[]
+  captions: LiveCaption[]
   seen: Set<string>
   requests: Map<string, CodingRequest>
 }
@@ -113,7 +113,7 @@ function createLiveController(input: () => Binding | undefined) {
     dictating: false,
     error: "",
     caption: "",
-    captions: [] as Caption[],
+    captions: [] as LiveCaption[],
     sessionID: "",
     server: "",
     typing: false,
@@ -181,7 +181,7 @@ function createLiveController(input: () => Binding | undefined) {
     void end()
   }
 
-  async function delegate(call: Connection, id: string) {
+  async function delegate(call: Connection, id: string, offset: number) {
     if (!current(call) || call.requests.has(id)) return
     const request: CodingRequest = {
       messageID: Identifier.ascending("message"),
@@ -190,23 +190,29 @@ function createLiveController(input: () => Binding | undefined) {
       blocked: false,
     }
     call.requests.set(id, request)
-    // The provider event carries metadata only; allow the last transcript
-    // fragment to arrive, then submit through the ordinary coding path.
-    await new Promise((resolve) => setTimeout(resolve, 350))
-    if (!current(call)) return
-    for (let attempt = 0; attempt < 20 && !call.captions.some((c) => c.role === "user" && !c.sealed); attempt++) {
+    // A delegation carries timing metadata, never the task text. Wait for the
+    // transcript to settle, then give the coding model the actual exchange so
+    // short replies and corrections retain their meaning.
+    let previous = ""
+    let stable = 0
+    for (let attempt = 0; attempt < 30 && stable < 3; attempt++) {
       await new Promise((resolve) => setTimeout(resolve, 100))
       if (!current(call)) return
+      const next = liveDelegationPrompt({ captions: call.captions, offset })?.text ?? ""
+      stable = next && next === previous ? stable + 1 : 0
+      previous = next
     }
-    const spoken = call.captions.filter((c) => c.role === "user" && !c.sealed)
-    if (!spoken.length) {
+    const prompt = liveDelegationPrompt({ captions: call.captions, offset })
+    if (!prompt) {
+      call.requests.delete(id)
       send(call, "thinking.append", "No new spoken request is available. Ask the caller to repeat it.", id)
       return
     }
-    spoken.forEach((caption) => {
-      caption.sealed = true
-    })
-    await submit(call, spoken.map((caption) => caption.text).join("\n\n"), request)
+    const accepted = await submit(call, prompt.text, request)
+    if (accepted)
+      prompt.captions.forEach((caption) => {
+        caption.sealed = true
+      })
   }
 
   function submit(call: Connection, text: string, request: CodingRequest) {
@@ -345,7 +351,7 @@ function createLiveController(input: () => Binding | undefined) {
     const request: CodingRequest = { messageID: Identifier.ascending("message"), delivered: false, blocked: false }
     call.requests.set(request.messageID, request)
     setState({ text: "", submitting: true, error: "" })
-    const caption: Caption = {
+    const caption: LiveCaption = {
       role: "user",
       text,
       start: Date.now() - call.started,
@@ -529,7 +535,7 @@ function createLiveController(input: () => Binding | undefined) {
           event.delegation?.target === "client" &&
           typeof event.delegation.id === "string"
         ) {
-          void delegate(call, event.delegation.id)
+          void delegate(call, event.delegation.id, Number(event.offset_ms))
         }
       } catch {
         /* Ignore malformed provider events without echoing their payload. */
