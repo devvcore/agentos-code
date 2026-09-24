@@ -51,3 +51,42 @@ export default {
 }
 
 export const Basic = story.Basic
+
+const chart = (spec: object) => "```chart\n" + JSON.stringify(spec, null, 2) + "\n```\n"
+
+export const Charts = {
+  args: {
+    text: [
+      "Revenue grew every quarter.\n",
+      chart({
+        type: "bar",
+        title: "Revenue by quarter (USD)",
+        labels: ["Q1", "Q2", "Q3", "Q4"],
+        datasets: [
+          { label: "2024", data: [98000, 112000, 121500, 140200] },
+          { label: "2025", data: [120000, 135500, 151200, 168900] },
+        ],
+        yLabel: "Revenue",
+        format: "currency",
+      }),
+      chart({
+        type: "area",
+        title: "Signups by channel",
+        stacked: true,
+        labels: ["Jan", "Feb", "Mar", "Apr", "May", "Jun"],
+        datasets: [
+          { label: "Organic", data: [120, 150, 170, 160, 190, 230] },
+          { label: "Paid", data: [80, 95, 90, 120, 140, 150] },
+        ],
+      }),
+      chart({
+        type: "doughnut",
+        title: "Spend mix",
+        labels: ["Payroll", "Cloud", "Marketing", "Other"],
+        datasets: [{ label: "Share", data: [54, 18, 20, 8] }],
+        format: "percent",
+      }),
+      chart({ type: "radar", labels: [], datasets: [] }),
+    ].join("\n"),
+  },
+}

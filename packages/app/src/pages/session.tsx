@@ -84,6 +84,7 @@ import {
 } from "@/pages/session/session-panel-width"
 import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { WorkPanel } from "@/pages/session/work-panel"
+import { workPreview, workSessionWidth } from "@/pages/session/work-preview"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
 import { SessionReviewEmptyNoGitV2 } from "@opencode-ai/session-ui/v2/session-review-empty-no-git-v2"
@@ -506,8 +507,8 @@ export default function Page() {
     }),
   )
   const sessionPanelWidth = createMemo(() => {
-    // Leave room for the 340px WorkPanel plus the 8px row gap.
-    if (work() && params.id && isDesktop()) return "calc(100% - 348px)"
+    // Leave room for the WorkPanel (wider while it previews a file) plus the row gap.
+    if (work() && params.id && isDesktop()) return workSessionWidth(!!workPreview.path(params.id))
     if (!desktopSidePanelOpen()) return "100%"
     if (desktopSessionResizeOpen()) return `${sessionPanelResizedWidth()}px`
     return `calc(100% - ${layout.fileTree.width()}px)`

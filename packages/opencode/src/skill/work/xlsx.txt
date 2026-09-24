@@ -147,6 +147,8 @@ m.add_chart(ch, "B6")
 
 Point charts at cell ranges so they update with the data. Label the axes, use one chart per question, and don't use 3D.
 
+Use a native openpyxl chart when the chart belongs in the workbook the user will keep, share, or update. To show the user a trend or comparison in your reply, use a ```chart block (see "Charts and visuals" in your instructions) with the computed values instead of screenshotting Excel. Both must use the same numbers as the sheet.
+
 ## Common pitfalls
 
 - Typing computed values instead of formulas, which leaves a dead model.

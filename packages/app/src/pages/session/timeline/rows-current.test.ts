@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
 import type { SessionMessageInfo } from "@opencode-ai/client/promise"
-import type { UserMessage } from "@opencode-ai/sdk/v2"
+import type { AssistantMessage, Part, UserMessage } from "@opencode-ai/sdk/v2"
 import { normalizeSessionMessages } from "@/utils/session-message"
 
 mock.module("@opencode-ai/session-ui/message-part", () => ({
@@ -221,5 +221,96 @@ describe("current session timeline rows", () => {
 
     expect(build(false)).toEqual(["UserMessage", "DiffSummary"])
     expect(build(true)).toEqual(["UserMessage"])
+  })
+
+  test("hides tool activity in Work mode behind a status line", () => {
+    const user = {
+      id: "msg_user",
+      sessionID: "ses_1",
+      role: "user",
+      time: { created: 1 },
+      agent: "work",
+      model: { providerID: "provider", modelID: "model" },
+    } satisfies UserMessage
+    const assistant = {
+      id: "msg_assistant",
+      sessionID: "ses_1",
+      role: "assistant",
+      parentID: "msg_user",
+      time: { created: 2 },
+      modelID: "model",
+      providerID: "provider",
+      mode: "work",
+      agent: "work",
+      path: { cwd: "/w", root: "/w" },
+      cost: 0,
+      tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    } satisfies AssistantMessage
+    const base = { sessionID: "ses_1", messageID: "msg_assistant", callID: "call" }
+    const time = { start: 1, end: 2 }
+    const parts = [
+      { ...base, id: "prt_text", type: "text", text: "On it" },
+      { ...base, id: "prt_reason", type: "reasoning", text: "thinking", time },
+      {
+        ...base,
+        id: "prt_write",
+        type: "tool",
+        tool: "write",
+        state: {
+          status: "completed",
+          input: { filePath: "/w/outputs/report.docx" },
+          output: "",
+          title: "",
+          metadata: {},
+          time,
+        },
+      },
+      {
+        ...base,
+        id: "prt_scratch",
+        type: "tool",
+        tool: "write",
+        state: {
+          status: "completed",
+          input: { filePath: "/w/.work/build.py" },
+          output: "",
+          title: "",
+          metadata: {},
+          time,
+        },
+      },
+      {
+        ...base,
+        id: "prt_read",
+        type: "tool",
+        tool: "read",
+        state: { status: "running", input: { filePath: "/w/sales_2026.csv" }, metadata: {}, time: { start: 1 } },
+      },
+    ] satisfies Part[]
+    const build = (work: boolean, status: "busy" | "idle") =>
+      Timeline.constructMessageRows(
+        user,
+        (messageID) => (messageID === assistant.id ? parts : []),
+        [assistant],
+        0,
+        true,
+        status,
+        true,
+        true,
+        work,
+      )
+
+    expect(build(true, "busy").map(TimelineRow.key)).toEqual([
+      "user-message:msg_user",
+      "assistant-part:msg_user:prt_text",
+      "assistant-part:msg_user:prt_write",
+      "thinking:msg_user",
+    ])
+    expect(build(true, "busy").at(-1)).toMatchObject({
+      workStatus: "ui.tool.work.status.reading",
+      workTarget: "sales_2026.csv",
+    })
+    expect(build(true, "idle").map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart", "AssistantPart"])
+    expect(build(false, "busy").filter((row) => row._tag === "AssistantPart")).toHaveLength(5)
   })
 })

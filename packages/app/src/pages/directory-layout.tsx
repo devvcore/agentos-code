@@ -1,17 +1,19 @@
 import { DataProvider } from "@opencode-ai/session-ui/context"
+import { createMarkdownImageResolver } from "@opencode-ai/session-ui/markdown-image"
 import { showToast } from "@/utils/toast"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { type Accessor, createEffect, createMemo, createResource, onCleanup, type ParentProps, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { LocalProvider, useLocal } from "@/context/local"
-import { SDKProvider } from "@/context/sdk"
+import { SDKProvider, useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { decode64 } from "@/utils/base64"
 import { Schema } from "effect"
 import type { ServerConnection } from "@/context/server"
 import { sessionHref } from "@/utils/session-route"
 import { useServerSync } from "@/context/server-sync"
+import { workPreview } from "@/pages/session/work-preview"
 
 export function DirectoryDataProvider(
   props: ParentProps<{
@@ -86,6 +88,15 @@ function LocalDataProvider(
 ) {
   const sync = useSync()
   const local = useLocal()
+  const sdk = useSDK()
+  // Local images in assistant markdown (e.g. matplotlib charts under outputs/) load through the file API.
+  const resolveImage = createMarkdownImageResolver({
+    directory: () => sdk().directory,
+    read: (path) =>
+      sdk()
+        .client.file.read({ path })
+        .then((result) => result.data),
+  })
   return (
     <DataProvider
       data={sync().data}
@@ -94,6 +105,8 @@ function LocalDataProvider(
       onNavigateToSession={props.onNavigateToSession}
       onSessionHref={props.onSessionHref}
       workMode={local.agent.mode() === "work"}
+      resolveImage={resolveImage}
+      onOpenFile={props.sessionID ? (path) => props.sessionID && workPreview.open(props.sessionID, path) : undefined}
     >
       {props.children}
     </DataProvider>

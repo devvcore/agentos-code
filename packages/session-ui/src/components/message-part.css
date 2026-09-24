@@ -724,6 +724,59 @@
   width: 100%;
 }
 
+[data-component="work-file-cards"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+[data-component="work-file-card"] {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(280px, 100%);
+  min-width: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--v2-background-bg-layer-02);
+  border: 0.5px solid var(--v2-border-border-base);
+  font: inherit;
+  color: var(--text-strong);
+  text-align: start;
+  cursor: default;
+  transition: border-color 0.15s ease;
+
+  &[data-clickable] {
+    cursor: pointer;
+
+    &:hover {
+      border-color: var(--v2-border-border-strong);
+    }
+  }
+
+  [data-component="file-icon"] {
+    width: 24px;
+    height: 24px;
+    flex: none;
+  }
+
+  [data-slot="work-file-card-text"] {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  [data-slot="work-file-card-name"] {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  [data-slot="work-file-card-kind"] {
+    color: var(--text-weak);
+  }
+}
+
 [data-component="dock-prompt"][data-kind="permission"] {
   position: relative;
   display: flex;

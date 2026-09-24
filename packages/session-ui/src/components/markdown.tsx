@@ -32,6 +32,9 @@ import { markdownBlockKey, type MarkdownToken } from "./markdown-worker-protocol
 import { shouldResetCodeTokens, type RenderedCodeState } from "./markdown-code-state"
 import { getCachedMarkdown, sanitizeMarkdown, touchCachedMarkdown, type MarkdownCacheEntry } from "./markdown-cache"
 import { inlineCodeKind } from "./markdown-inline-code-kind"
+import { MarkdownChart } from "./markdown-chart"
+import { useOptionalData } from "../context/data"
+import type { UiI18n } from "@opencode-ai/ui/context/i18n"
 
 type RenderedBlock =
   | (MarkdownCacheEntry & { key: string; mode: Exclude<Block["mode"], "code"> })
@@ -45,6 +48,14 @@ type RenderedBlock =
       generation: number
       stable: MarkdownToken[]
       unstable: MarkdownToken[]
+    }
+  | {
+      key: string
+      mode: "chart"
+      raw: string
+      hash: string
+      source: string
+      complete: boolean
     }
 
 type RenderResult = {
@@ -372,6 +383,7 @@ export function Markdown(
 ) {
   const [local, others] = splitProps(props, ["text", "cacheKey", "streaming", "class", "classList"])
   const i18n = useI18n()
+  const data = useOptionalData()
   const [root, setRoot] = createSignal<HTMLDivElement>()
   const owner = createUniqueId()
   const activeCodeKeys = new Set<string>()
@@ -433,6 +445,7 @@ export function Markdown(
           const key = base ? `${base}:${index}:${block.mode}` : undefined
           const blockKey = markdownBlockKey(owner, src.key, index, block.mode)
 
+          if (block.mode === "code" && block.language === "chart") return chartBlock(blockKey, block)
           if (block.mode === "code") {
             const cached = completedCode.get(blockKey)
             if (block.complete && cached?.raw === block.raw) return cached
@@ -501,6 +514,7 @@ export function Markdown(
     if (isServer) return
     if (content.length === 0) {
       disposeCopyButtons(container)
+      disposeCharts(container)
       container.innerHTML = ""
       return
     }
@@ -520,8 +534,11 @@ export function Markdown(
       const child = container.lastElementChild
       if (!child) break
       disposeCopyButtons(child)
+      disposeCharts(child)
       child.remove()
     }
+    mountCharts(container, i18n)
+    resolveImages(container, data?.resolveImage)
     container
       .querySelectorAll<HTMLElement>('[data-slot="markdown-copy-button"]')
       .forEach((button) => setCopyState(button, labels, button.dataset.copied === "true"))
@@ -534,6 +551,8 @@ export function Markdown(
 
   onCleanup(() => {
     if (copyCleanup) copyCleanup()
+    const container = root()
+    if (container) disposeCharts(container)
     disposeMarkdownProjection(owner)
     activeCodeKeys.forEach(disposeCode)
     completedCode.clear()
@@ -564,8 +583,9 @@ function pendingBlocks(
   const initial = result.blocks.length === 1 && result.blocks[0]?.key === "initial"
   return projection.blocks.map((block, index) => {
     const current = initial ? undefined : result.blocks[index]
-    if (current && canReusePendingBlock(current, block)) return current
+    if (current && current.mode !== "chart" && canReusePendingBlock(current, block)) return current
     const key = markdownBlockKey(owner, cacheKey, index, block.mode)
+    if (block.mode === "code" && block.language === "chart") return chartBlock(key, block)
     if (block.mode !== "code")
       return { key, mode: block.mode, raw: block.raw, hash: String(block.raw.length), html: fallback(block.src) }
     return {
@@ -592,6 +612,10 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
     updateCodeBlock(container, current, block, labels)
     return
   }
+  if (block.mode === "chart") {
+    updateChartBlock(container, current, block)
+    return
+  }
   if (
     current instanceof HTMLDivElement &&
     current.dataset.markdownKey === block.key &&
@@ -614,6 +638,22 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
 
   morphdom(current, next, {
     onBeforeElUpdated: (fromEl, toEl) => {
+      // Keep mounted charts and resolved local images while the surrounding markdown re-renders.
+      if (
+        fromEl instanceof HTMLElement &&
+        toEl instanceof HTMLElement &&
+        fromEl.dataset.component === "markdown-chart" &&
+        toEl.dataset.component === "markdown-chart"
+      )
+        return chartSource(fromEl) !== chartSource(toEl)
+      if (
+        fromEl instanceof HTMLImageElement &&
+        toEl instanceof HTMLImageElement &&
+        !!fromEl.dataset.markdownSrc &&
+        fromEl.dataset.markdownSrc === toEl.dataset.markdownSrc &&
+        fromEl.alt === toEl.alt
+      )
+        return false
       if (
         fromEl instanceof HTMLElement &&
         toEl instanceof HTMLElement &&
@@ -626,7 +666,10 @@ function updateBlock(container: HTMLDivElement, index: number, block: RenderedBl
       return true
     },
     onBeforeNodeDiscarded: (node) => {
-      if (node instanceof Element) disposeCopyButtons(node)
+      if (node instanceof Element) {
+        disposeCopyButtons(node)
+        disposeCharts(node)
+      }
       return true
     },
   })
@@ -699,10 +742,105 @@ function updateCodeBlock(
   })
   if (current) {
     disposeCopyButtons(current)
+    disposeCharts(current)
     current.replaceWith(next)
     return
   }
   container.appendChild(next)
+}
+
+function chartBlock(key: string, block: Block): Extract<RenderedBlock, { mode: "chart" }> {
+  const complete = !!block.complete
+  return {
+    key,
+    mode: "chart",
+    raw: block.raw,
+    // A streaming chart shows one placeholder, so partial JSON deltas do not touch the DOM.
+    hash: complete ? `chart:${checksum(block.src) ?? block.src.length}` : "chart:pending",
+    source: block.src,
+    complete,
+  }
+}
+
+function updateChartBlock(
+  container: HTMLDivElement,
+  current: Element | undefined,
+  block: Extract<RenderedBlock, { mode: "chart" }>,
+) {
+  if (
+    current instanceof HTMLDivElement &&
+    current.dataset.markdownKey === block.key &&
+    current.dataset.markdownHash === block.hash
+  )
+    return
+
+  const next = document.createElement("div")
+  next.dataset.markdownBlock = ""
+  next.dataset.markdownKey = block.key
+  next.dataset.markdownHash = block.hash
+  next.style.display = "contents"
+  const host = document.createElement("div")
+  host.setAttribute("data-component", "markdown-chart")
+  if (!block.complete) host.dataset.chartPending = "true"
+  const source = document.createElement("div")
+  source.setAttribute("data-slot", "markdown-chart-source")
+  source.hidden = true
+  source.textContent = block.source
+  host.appendChild(source)
+  next.appendChild(host)
+
+  if (!current) {
+    container.appendChild(next)
+    return
+  }
+  disposeCopyButtons(current)
+  disposeCharts(current)
+  current.replaceWith(next)
+}
+
+const chartViews = new WeakMap<Element, () => void>()
+
+function chartSource(host: Element) {
+  return `${host.getAttribute("data-chart-pending") ?? ""}\n${host.querySelector('[data-slot="markdown-chart-source"]')?.textContent ?? ""}`
+}
+
+function mountCharts(root: HTMLElement, i18n: UiI18n) {
+  root.querySelectorAll<HTMLElement>('[data-component="markdown-chart"]').forEach((host) => {
+    if (host.querySelector(':scope > [data-slot="markdown-chart-view"]')) return
+    const source = host.querySelector('[data-slot="markdown-chart-source"]')?.textContent ?? ""
+    const pending = host.dataset.chartPending === "true"
+    const view = document.createElement("div")
+    view.setAttribute("data-slot", "markdown-chart-view")
+    host.appendChild(view)
+    chartViews.set(view, render(() => <MarkdownChart source={source} pending={pending} i18n={i18n} />, view))
+  })
+}
+
+function disposeCharts(root: Element) {
+  const views = [
+    ...(root.getAttribute("data-slot") === "markdown-chart-view" ? [root] : []),
+    ...Array.from(root.querySelectorAll('[data-slot="markdown-chart-view"]')),
+  ]
+  views.forEach((view) => {
+    chartViews.get(view)?.()
+    chartViews.delete(view)
+  })
+}
+
+function resolveImages(root: HTMLElement, resolve: ((src: string) => Promise<string | undefined>) | undefined) {
+  root.querySelectorAll<HTMLImageElement>("img[data-markdown-src]:not([data-markdown-image])").forEach((image) => {
+    const src = image.dataset.markdownSrc ?? ""
+    image.dataset.markdownImage = "loading"
+    void (resolve?.(src) ?? Promise.resolve(undefined)).then((url) => {
+      if (image.dataset.markdownSrc !== src) return
+      if (!url) {
+        image.dataset.markdownImage = "missing"
+        return
+      }
+      image.src = url
+      image.dataset.markdownImage = "ready"
+    })
+  })
 }
 
 function sameToken(left: MarkdownToken, right: MarkdownToken | undefined) {

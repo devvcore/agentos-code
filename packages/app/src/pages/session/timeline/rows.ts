@@ -2,6 +2,7 @@ import { parseCommentNote, readCommentMetadata } from "@/utils/comment-note"
 import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 import { AssistantMessage, Part, SessionStatus, UserMessage } from "@opencode-ai/sdk/v2"
 import { groupParts, renderable, type PartGroup } from "@opencode-ai/session-ui/message-part"
+import { workActivity, workPartVisible } from "@opencode-ai/session-ui/work-part"
 import { TimelineRow, type SummaryDiff } from "./timeline-row"
 import { uniqueSummaryDiffs } from "./summary-diffs"
 import { compareMessages } from "@/utils/session-message"
@@ -26,7 +27,12 @@ export type TimelineRowMap = {
     group: PartGroup
     previousAssistantPart: boolean
   }
-  Thinking: { userMessageID: string; reasoningHeading?: string }
+  Thinking: {
+    userMessageID: string
+    reasoningHeading?: string
+    workStatus?: NonNullable<ReturnType<typeof workActivity>>["key"]
+    workTarget?: string
+  }
   Retry: { userMessageID: string }
   DiffSummary: { userMessageID: string; diffs: SummaryDiff[] }
   Error: { userMessageID: string; text: string }
@@ -41,7 +47,7 @@ export namespace Timeline {
     status: SessionStatus["type"],
     inlineComments: boolean,
     projectedUserMessages: UserMessage[],
-    // Omniwork Work mode renders no diff summary rows
+    // Omniwork Work mode hides tool activity and diff summaries behind a quiet status line
     work = false,
   ) {
     const turns: { user: UserMessage; assistants: AssistantMessage[] }[] = []
@@ -126,7 +132,7 @@ export namespace Timeline {
 
     const assistantPartRefs = assistantMessages.flatMap((message, messageIndex) =>
       getMessageParts(message.id)
-        .filter((part) => renderable(part, showReasoning))
+        .filter((part) => renderable(part, showReasoning) && (!work || workPartVisible(part)))
         .map((part) => ({ messageID: message.id, messageIndex, part })),
     )
     const assistantItems =
@@ -194,7 +200,18 @@ export namespace Timeline {
       assistantGroupIndex += 1
     })
 
-    if (isActive && status === "busy" && !error && (showReasoning ? assistantPartRefs.length === 0 : true)) {
+    if (isActive && status === "busy" && !error && work) {
+      const activity = workActivity(assistantMessages.flatMap((message) => getMessageParts(message.id)))
+      rows.push(
+        new TimelineRow.Thinking({
+          userMessageID: userMessage.id,
+          workStatus: activity?.key,
+          workTarget: activity?.target,
+        }),
+      )
+    }
+
+    if (isActive && status === "busy" && !error && !work && (showReasoning ? assistantPartRefs.length === 0 : true)) {
       const heading = assistantMessages
         .flatMap((message) => getMessageParts(message.id))
         .map((part) => (part.type === "reasoning" && part.text ? reasoningHeading(part.text) : undefined))

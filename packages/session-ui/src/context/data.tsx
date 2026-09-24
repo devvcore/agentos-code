@@ -46,7 +46,11 @@ export type NavigateToSessionFn = (sessionID: string) => void
 
 export type SessionHrefFn = (sessionID: string) => string
 
-export const { use: useData, provider: DataProvider } = createSimpleContext({
+export const {
+  use: useData,
+  provider: DataProvider,
+  optional: useOptionalData,
+} = createSimpleContext({
   name: "Data",
   init: (props: {
     data: Data
@@ -56,6 +60,10 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     onSessionHref?: SessionHrefFn
     // Omniwork Work mode: tool parts render friendly file lines instead of diffs
     workMode?: boolean
+    // Omniwork Work mode: opens a deliverable (absolute path) in the side panel preview
+    onOpenFile?: (path: string) => void
+    // Resolves a local markdown image source to a displayable (data/blob) URL, or undefined when not allowed
+    resolveImage?: (src: string) => Promise<string | undefined>
   }) => {
     return {
       get store() {
@@ -69,6 +77,12 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       },
       get workMode() {
         return props.workMode ?? false
+      },
+      get openFile() {
+        return props.onOpenFile
+      },
+      get resolveImage() {
+        return props.resolveImage
       },
       navigateToSession: props.onNavigateToSession,
       sessionHref: props.onSessionHref,

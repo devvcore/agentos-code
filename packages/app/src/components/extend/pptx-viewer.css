@@ -1,0 +1,15 @@
+/* Map the viewer's palette onto the app theme so the chrome follows light and dark mode. */
+.omni-pptx.rpv-root {
+  --rpv-ink: var(--v2-text-text-base);
+  --rpv-paper: var(--v2-background-bg-deep);
+  --rpv-panel: var(--v2-background-bg-layer-01);
+  --rpv-rule: var(--v2-border-border-muted);
+  --rpv-accent: var(--v2-text-text-accent);
+  border: 0;
+}
+
+/* The stage and status overlays hard-code a beige backdrop behind the slides. */
+.omni-pptx .rpv-stage,
+.omni-pptx .rpv-status {
+  background: var(--v2-background-bg-deep);
+}

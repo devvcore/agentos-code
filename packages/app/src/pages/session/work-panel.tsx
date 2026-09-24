@@ -7,6 +7,7 @@
  *
  * It reads everything else from context (useSync, useSDK, usePlatform, useServer), fetches the
  * session todo list on mount, and hides itself below the desktop breakpoint like SessionSidePanel.
+ * While `workPreview` holds a file for the session, the panel widens and shows that file instead.
  */
 import { For, Show, createEffect, createMemo, on } from "solid-js"
 import { createMediaQuery } from "@solid-primitives/media"
@@ -25,6 +26,8 @@ import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { errorMessage } from "@/pages/layout/helpers"
 import { workOutputs } from "@/pages/session/work-panel-data"
+import { previewApp, workPanelWidth, workPreview } from "@/pages/session/work-preview"
+import { WorkPreview } from "@/pages/session/work-preview-view"
 import { fileManagerApp } from "@/utils/file-manager"
 import { showToast } from "@/utils/toast"
 
@@ -73,6 +76,12 @@ export function WorkPanel(props: { sessionID: string }) {
     platform.openPath(path).catch(failed)
   }
 
+  const previewing = createMemo(() => workPreview.path(props.sessionID))
+  const openLabel = (path: string) => {
+    const app = previewApp(path)
+    return app ? language.t("omni.work.preview.openIn", { app }) : language.t("omni.work.preview.openDefault")
+  }
+
   const reveal = (path: string) => {
     if (!canReveal() || !platform.revealPath) return
     platform.revealPath(path).then((revealed) => {
@@ -85,14 +94,28 @@ export function WorkPanel(props: { sessionID: string }) {
       <aside
         id="work-panel"
         aria-label={language.t("omni.work.panel")}
-        class="relative min-w-0 h-full w-[340px] shrink-0 flex flex-col overflow-hidden"
+        class="relative min-w-0 h-full shrink-0 flex flex-col overflow-hidden transition-[width] duration-[240ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        style={{ width: workPanelWidth(!!previewing()) }}
         classList={{
           "bg-v2-background-bg-base rounded-[10px] shadow-[var(--v2-elevation-raised)]":
             settings.general.newLayoutDesigns(),
           "bg-background-base border-l border-border-weaker-base": !settings.general.newLayoutDesigns(),
         }}
       >
-        <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-6 px-4 py-4">
+        <Show when={previewing()}>
+          {(path) => (
+            <WorkPreview
+              path={path()}
+              version={outputs().find((item) => item.path === path())?.time}
+              onOpen={canOpen() ? () => open(path()) : undefined}
+              onClose={() => workPreview.close(props.sessionID)}
+            />
+          )}
+        </Show>
+        <div
+          class="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-6 px-4 py-4"
+          classList={{ hidden: !!previewing() }}
+        >
           <section class="flex flex-col gap-3">
             <div class="flex items-center justify-between gap-2">
               <h2 class="text-14-medium text-v2-text-text-base">{language.t("omni.work.progress.title")}</h2>
@@ -156,19 +179,26 @@ export function WorkPanel(props: { sessionID: string }) {
                     )
                     return (
                       <li class="group flex items-center gap-1 rounded-md hover:bg-v2-overlay-simple-overlay-hover">
-                        <Show
-                          when={canOpen()}
-                          fallback={<div class="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5">{label()}</div>}
+                        <button
+                          type="button"
+                          class="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 text-left"
+                          title={item.path}
+                          aria-label={language.t("omni.work.outputs.preview", { name: item.name })}
+                          onClick={() => workPreview.open(props.sessionID, item.path)}
                         >
-                          <button
-                            type="button"
-                            class="flex-1 min-w-0 flex items-center gap-2.5 px-2 py-1.5 text-left"
-                            title={item.path}
-                            aria-label={language.t("omni.work.outputs.open", { name: item.name })}
-                            onClick={() => open(item.path)}
-                          >
-                            {label()}
-                          </button>
+                          {label()}
+                        </button>
+                        <Show when={canOpen()}>
+                          <TooltipV2 value={openLabel(item.path)} placement="left">
+                            <IconButtonV2
+                              class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                              size="small"
+                              variant="ghost"
+                              icon={<Icon name="outline-square-arrow" size="small" />}
+                              aria-label={openLabel(item.path)}
+                              onClick={() => open(item.path)}
+                            />
+                          </TooltipV2>
                         </Show>
                         <Show when={canReveal()}>
                           <TooltipV2 value={revealLabel()} placement="left">
@@ -191,7 +221,10 @@ export function WorkPanel(props: { sessionID: string }) {
           </section>
         </div>
 
-        <section class="shrink-0 flex items-center gap-2 px-4 py-3 border-t border-v2-border-border-muted">
+        <section
+          class="shrink-0 flex items-center gap-2 px-4 py-3 border-t border-v2-border-border-muted"
+          classList={{ hidden: !!previewing() }}
+        >
           <Icon name="folder" size="small" class="shrink-0 text-v2-icon-icon-muted" />
           <div class="flex-1 min-w-0 flex flex-col">
             <span class="text-11-regular text-v2-text-text-faint">{language.t("omni.work.folder.title")}</span>

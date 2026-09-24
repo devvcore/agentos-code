@@ -42,7 +42,8 @@ import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { ToolErrorCard } from "./tool-error-card"
-import { WORK_FILE_TOOLS, workFileChanges, workFileLabelKey } from "./work-file-change"
+import { WORK_FILE_TOOLS, workFileLabelKey } from "./work-file-change"
+import { workFilePath, workOutputChanges } from "./work-part"
 import { Checkbox } from "@opencode-ai/ui/checkbox"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Markdown } from "./markdown"
@@ -1609,7 +1610,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
             }}
           </Match>
           <Match when={data.workMode && WORK_FILE_TOOLS.has(part().tool)}>
-            <WorkFileTool tool={part().tool} input={input()} metadata={partMetadata()} status={part().state.status} />
+            <WorkFileTool part={part()} />
           </Match>
           <Match when={true}>
             <Dynamic
@@ -1636,36 +1637,58 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   )
 }
 
-function WorkFileTool(props: {
-  tool: string
-  input: Record<string, unknown>
-  metadata: Record<string, unknown>
-  status: string
-}) {
+// Omniwork Work mode: a deliverable under outputs/ renders as a compact file card that opens the preview.
+function WorkFileTool(props: { part: ToolPart }) {
+  const data = useData()
   const i18n = useI18n()
-  const pending = () => props.status === "pending" || props.status === "running"
-  const changes = createMemo(() => workFileChanges(props.tool, props.input, props.metadata))
+  const pending = () => props.part.state.status === "pending" || props.part.state.status === "running"
+  const changes = createMemo(() => workOutputChanges(props.part))
   return (
-    <Show
-      when={changes().length > 0}
-      fallback={
-        <BasicTool
-          icon="pencil-line"
-          status={props.status}
-          trigger={{ title: i18n.t(workFileLabelKey(undefined, pending())) }}
-        />
-      }
-    >
+    <div data-component="work-file-cards">
       <For each={changes()}>
-        {(change) => (
-          <BasicTool
-            icon="pencil-line"
-            status={props.status}
-            trigger={{ title: i18n.t(workFileLabelKey(change.kind, pending()), { file: change.file }) }}
-          />
-        )}
+        {(change) => {
+          const open = () => (change.kind === "delete" || pending() ? undefined : data.openFile)
+          const content = () => (
+            <>
+              <FileIcon node={{ path: change.file, type: "file" }} />
+              <span data-slot="work-file-card-text">
+                <span data-slot="work-file-card-name" class="text-13-medium">
+                  {change.file}
+                </span>
+                <span data-slot="work-file-card-kind" class="text-12-regular">
+                  {i18n.t(pending() ? "ui.tool.work.kind.pending" : `ui.tool.work.kind.${change.kind}`)}
+                </span>
+              </span>
+            </>
+          )
+          return (
+            <Show
+              when={open()}
+              fallback={
+                <div
+                  data-component="work-file-card"
+                  title={i18n.t(workFileLabelKey(change.kind, pending()), { file: change.file })}
+                >
+                  {content()}
+                </div>
+              }
+            >
+              {(openFile) => (
+                <button
+                  type="button"
+                  data-component="work-file-card"
+                  data-clickable="true"
+                  title={i18n.t(workFileLabelKey(change.kind, false), { file: change.file })}
+                  onClick={() => openFile()(workFilePath(data.directory, change.path))}
+                >
+                  {content()}
+                </button>
+              )}
+            </Show>
+          )
+        }}
       </For>
-    </Show>
+    </div>
   )
 }
 

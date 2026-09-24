@@ -1,5 +1,6 @@
 import type { SnapshotFileDiff } from "@opencode-ai/sdk/v2"
 import type { PartGroup } from "@opencode-ai/session-ui/message-part"
+import type { workActivity } from "@opencode-ai/session-ui/work-part"
 import { Data, Equal } from "effect"
 
 export type SummaryDiff = SnapshotFileDiff & { file: string }
@@ -27,6 +28,9 @@ export namespace TimelineRow {
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string
     reasoningHeading?: string
+    // Omniwork Work mode: what the running turn is doing, e.g. "Reading sales.csv"
+    workStatus?: NonNullable<ReturnType<typeof workActivity>>["key"]
+    workTarget?: string
   }> {}
   export class DiffSummary extends Data.TaggedClass("DiffSummary")<{
     userMessageID: string

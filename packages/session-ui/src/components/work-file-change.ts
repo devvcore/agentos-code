@@ -3,6 +3,7 @@ import { getFilename } from "@opencode-ai/core/util/path"
 // Omniwork Work mode shows file edits as one friendly line per file instead of diffs.
 export type WorkFileChange = {
   file: string
+  path: string
   kind: "create" | "update" | "delete" | "write"
 }
 
@@ -19,13 +20,15 @@ export function workFileChanges(
       filediff && typeof filediff === "object" && "file" in filediff && typeof filediff.file === "string"
         ? filediff.file
         : undefined
-    const file = getFilename(diffFile || (typeof input.filePath === "string" ? input.filePath : undefined))
-    return file ? [{ file, kind: "update" }] : []
+    const path = diffFile || (typeof input.filePath === "string" ? input.filePath : "")
+    const file = getFilename(path)
+    return file ? [{ file, path, kind: "update" }] : []
   }
   if (tool === "write") {
-    const file = getFilename(typeof input.filePath === "string" ? input.filePath : undefined)
+    const path = typeof input.filePath === "string" ? input.filePath : ""
+    const file = getFilename(path)
     if (!file) return []
-    return [{ file, kind: metadata.exists === true ? "update" : metadata.exists === false ? "create" : "write" }]
+    return [{ file, path, kind: metadata.exists === true ? "update" : metadata.exists === false ? "create" : "write" }]
   }
   const files = Array.isArray(metadata.files)
     ? metadata.files.flatMap((item): WorkFileChange[] => {
@@ -39,13 +42,14 @@ export function workFileChanges(
         const file = getFilename(path)
         if (!file) return []
         const type = "type" in item ? item.type : undefined
-        return [{ file, kind: type === "add" ? "create" : type === "delete" ? "delete" : "update" }]
+        return [{ file, path, kind: type === "add" ? "create" : type === "delete" ? "delete" : "update" }]
       })
     : []
   if (files.length > 0) return files
   const text = typeof input.patchText === "string" ? input.patchText : ""
   return [...text.matchAll(/^\*\*\* (Add|Update|Delete) File: (.+)$/gm)].map((match) => ({
     file: getFilename(match[2]!.trim()),
+    path: match[2]!.trim(),
     kind: match[1] === "Add" ? "create" : match[1] === "Delete" ? "delete" : "update",
   }))
 }

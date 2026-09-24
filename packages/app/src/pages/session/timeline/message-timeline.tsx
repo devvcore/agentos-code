@@ -129,16 +129,39 @@ const markBoundaryGesture = (input: {
   }
 }
 
-function TimelineThinkingRow(props: { reasoningHeading?: string; showReasoningSummaries: boolean }) {
+function TimelineThinkingRow(props: {
+  reasoningHeading?: string
+  showReasoningSummaries: boolean
+  work?: boolean
+  workStatus?: TimelineRowByTag<"Thinking">["workStatus"]
+  workTarget?: string
+}) {
   const language = useLanguage()
+  const workStatus = () =>
+    props.workStatus ? language.t(props.workStatus, { target: props.workTarget ?? "" }) : undefined
 
   return (
-    <div data-slot="session-turn-thinking">
-      <TextShimmer text={language.t("ui.sessionTurn.status.thinking")} />
-      <Show when={!props.showReasoningSummaries}>
-        <TextReveal text={props.reasoningHeading} class="session-turn-thinking-heading" travel={25} duration={700} />
-      </Show>
-    </div>
+    <Show
+      when={props.work}
+      fallback={
+        <div data-slot="session-turn-thinking">
+          <TextShimmer text={language.t("ui.sessionTurn.status.thinking")} />
+          <Show when={!props.showReasoningSummaries}>
+            <TextReveal
+              text={props.reasoningHeading}
+              class="session-turn-thinking-heading"
+              travel={25}
+              duration={700}
+            />
+          </Show>
+        </div>
+      }
+    >
+      <div data-slot="session-turn-thinking">
+        <TextShimmer text={language.t("ui.tool.work.status.working")} />
+        <TextReveal text={workStatus()} class="session-turn-thinking-heading" travel={25} duration={700} />
+      </div>
+    </Show>
   )
 }
 
@@ -341,6 +364,7 @@ export function MessageTimeline(props: {
     inlineComments: settings.general.newLayoutDesigns,
     work: () => !!props.work,
   })
+  const workMode = () => !!props.work
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
   const lastAssistantGroupKey = projection.lastAssistantGroupKey
@@ -1189,6 +1213,9 @@ export function MessageTimeline(props: {
               <TimelineThinkingRow
                 reasoningHeading={thinkingRow().reasoningHeading}
                 showReasoningSummaries={settings.general.showReasoningSummaries()}
+                work={props.work}
+                workStatus={thinkingRow().workStatus}
+                workTarget={thinkingRow().workTarget}
               />
             </div>
           </TimelineRowFrame>
@@ -1245,7 +1272,8 @@ export function MessageTimeline(props: {
       const part = getMsgPart(value.group.ref.messageID, value.group.ref.partID)
       if (part?.type === "tool") return part
     }
-    const asyncFile = () => ["edit", "write", "apply_patch"].includes(tool()?.tool ?? "")
+    // Work mode file cards render synchronously; only diff viewers report size asynchronously
+    const asyncFile = () => !workMode() && ["edit", "write", "apply_patch"].includes(tool()?.tool ?? "")
     const [ready, setReady] = createSignal(initialItem.size <= timelineFallbackItemSize || !asyncFile())
     let contentMeasureFrame: number | undefined
 
