@@ -28,6 +28,8 @@ export type SessionCommandContext = {
   focusInput: () => void
   review?: () => boolean
   fileBrowser?: () => boolean
+  // Omniwork Work mode: no terminal, review, file tree, or code selection commands
+  work?: () => boolean
 }
 
 const withCategory = (category: string) => {
@@ -647,9 +649,11 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     ...sessionCmds(),
     ...shareCmds(),
     ...fileCmds(),
-    ...contextCmds(),
-    ...viewCmds(),
-    ...terminalCmds(),
+    ...(actions.work?.() ? [] : contextCmds()),
+    ...viewCmds().filter(
+      (option) => !actions.work?.() || !["terminal.toggle", "review.toggle", "fileTree.toggle"].includes(option.id),
+    ),
+    ...(actions.work?.() ? [] : terminalCmds()),
     ...messageCmds(),
     ...mcpCmds(),
     ...permissionsCmds(),

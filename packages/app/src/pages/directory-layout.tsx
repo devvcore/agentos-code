@@ -4,7 +4,7 @@ import { base64Encode } from "@opencode-ai/core/util/encode"
 import { useLocation, useNavigate, useParams } from "@solidjs/router"
 import { type Accessor, createEffect, createMemo, createResource, onCleanup, type ParentProps, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
-import { LocalProvider } from "@/context/local"
+import { LocalProvider, useLocal } from "@/context/local"
 import { SDKProvider } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { decode64 } from "@/utils/base64"
@@ -60,17 +60,43 @@ export function DirectoryDataProvider(
   return (
     <Show when={directory()} keyed>
       {(directory) => (
-        <DataProvider
-          data={sync().data}
-          directory={directory}
-          sessionID={params.id}
-          onNavigateToSession={(sessionID: string) => navigate(href(sessionID))}
-          onSessionHref={href}
-        >
-          <LocalProvider>{props.children}</LocalProvider>
-        </DataProvider>
+        <LocalProvider>
+          <LocalDataProvider
+            directory={directory}
+            sessionID={params.id}
+            onNavigateToSession={(sessionID: string) => navigate(href(sessionID))}
+            onSessionHref={href}
+          >
+            {props.children}
+          </LocalDataProvider>
+        </LocalProvider>
       )}
     </Show>
+  )
+}
+
+// Lives under LocalProvider so message parts can follow the Omniwork Code | Work mode.
+function LocalDataProvider(
+  props: ParentProps<{
+    directory: string
+    sessionID?: string
+    onNavigateToSession: (sessionID: string) => void
+    onSessionHref: (sessionID: string) => string
+  }>,
+) {
+  const sync = useSync()
+  const local = useLocal()
+  return (
+    <DataProvider
+      data={sync().data}
+      directory={props.directory}
+      sessionID={props.sessionID}
+      onNavigateToSession={props.onNavigateToSession}
+      onSessionHref={props.onSessionHref}
+      workMode={local.agent.mode() === "work"}
+    >
+      {props.children}
+    </DataProvider>
   )
 }
 

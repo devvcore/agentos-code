@@ -42,6 +42,7 @@ import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { ToolErrorCard } from "./tool-error-card"
+import { WORK_FILE_TOOLS, workFileChanges, workFileLabelKey } from "./work-file-change"
 import { Checkbox } from "@opencode-ai/ui/checkbox"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
 import { Markdown } from "./markdown"
@@ -1607,6 +1608,9 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               )
             }}
           </Match>
+          <Match when={data.workMode && WORK_FILE_TOOLS.has(part().tool)}>
+            <WorkFileTool tool={part().tool} input={input()} metadata={partMetadata()} status={part().state.status} />
+          </Match>
           <Match when={true}>
             <Dynamic
               component={render()}
@@ -1628,6 +1632,39 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
           </Match>
         </Switch>
       </div>
+    </Show>
+  )
+}
+
+function WorkFileTool(props: {
+  tool: string
+  input: Record<string, unknown>
+  metadata: Record<string, unknown>
+  status: string
+}) {
+  const i18n = useI18n()
+  const pending = () => props.status === "pending" || props.status === "running"
+  const changes = createMemo(() => workFileChanges(props.tool, props.input, props.metadata))
+  return (
+    <Show
+      when={changes().length > 0}
+      fallback={
+        <BasicTool
+          icon="pencil-line"
+          status={props.status}
+          trigger={{ title: i18n.t(workFileLabelKey(undefined, pending())) }}
+        />
+      }
+    >
+      <For each={changes()}>
+        {(change) => (
+          <BasicTool
+            icon="pencil-line"
+            status={props.status}
+            trigger={{ title: i18n.t(workFileLabelKey(change.kind, pending()), { file: change.file }) }}
+          />
+        )}
+      </For>
     </Show>
   )
 }

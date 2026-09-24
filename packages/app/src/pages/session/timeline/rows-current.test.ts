@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from "bun:test"
 import type { SessionMessageInfo } from "@opencode-ai/client/promise"
+import type { UserMessage } from "@opencode-ai/sdk/v2"
 import { normalizeSessionMessages } from "@/utils/session-message"
 
 mock.module("@opencode-ai/session-ui/message-part", () => ({
@@ -203,5 +204,22 @@ describe("current session timeline rows", () => {
     )
 
     expect(result.rows.map((row) => row._tag)).toEqual(["UserMessage", "AssistantPart"])
+  })
+
+  test("skips diff summary rows in Work mode", () => {
+    const user = {
+      id: "msg_user",
+      sessionID: "ses_1",
+      role: "user",
+      time: { created: 1 },
+      agent: "work",
+      model: { providerID: "provider", modelID: "model" },
+      summary: { diffs: [{ file: "report.docx", additions: 1, deletions: 0 }] },
+    } satisfies UserMessage
+    const build = (work: boolean) =>
+      Timeline.constructMessageRows(user, () => [], [], 0, false, "idle", true, true, work).map((row) => row._tag)
+
+    expect(build(false)).toEqual(["UserMessage", "DiffSummary"])
+    expect(build(true)).toEqual(["UserMessage"])
   })
 })

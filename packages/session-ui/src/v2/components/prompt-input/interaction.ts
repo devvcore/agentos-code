@@ -44,6 +44,8 @@ export type PromptInputV2ViewConfig = {
     onOpen: () => void
     onClose: () => void
   }
+  // When true, `!` and the Add menu cannot enter shell mode (Omniwork Work mode)
+  shellDisabled?: Accessor<boolean>
   onKeyDown?: (event: KeyboardEvent) => void
   onPaste?: (event: ClipboardEvent) => void
   onDrop?: (event: DragEvent) => void
@@ -161,7 +163,7 @@ export function createPromptInputV2Controller(input: {
 
   function dispatch(event: PromptInputV2InteractionEvent) {
     const mode = state.mode
-    const result = transitionPromptInputV2(state, event, draft.state)
+    const result = transitionPromptInputV2(state, event, draft.state, !input.view.shellDisabled?.())
     const action = event.type === "popover.select" ? input.onSuggestionSelect?.(event.item) : undefined
     if (event.type === "popover.select") {
       if (!action || state.popover.type !== "command-menu") result.commands.forEach(execute)

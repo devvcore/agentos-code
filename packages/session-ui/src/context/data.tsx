@@ -54,6 +54,8 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
     sessionID?: string
     onNavigateToSession?: NavigateToSessionFn
     onSessionHref?: SessionHrefFn
+    // Omniwork Work mode: tool parts render friendly file lines instead of diffs
+    workMode?: boolean
   }) => {
     return {
       get store() {
@@ -64,6 +66,9 @@ export const { use: useData, provider: DataProvider } = createSimpleContext({
       },
       get sessionID() {
         return props.sessionID
+      },
+      get workMode() {
+        return props.workMode ?? false
       },
       navigateToSession: props.onNavigateToSession,
       sessionHref: props.onSessionHref,

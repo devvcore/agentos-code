@@ -64,6 +64,16 @@ describe("prompt input v2 interaction machine", () => {
     expect(result.commands).toContainEqual({ type: "draft.setText", value: "" })
   })
 
+  test("keeps an exclamation mark as text when shell is disabled", () => {
+    const state = createPromptInputV2InteractionState()
+    const typed = transitionPromptInputV2(state, { type: "input.changed", value: "!" }, persisted("!"), false)
+    const opened = transitionPromptInputV2(state, { type: "mode.shell" }, persisted(), false)
+
+    expect(typed.state.mode).toBe("normal")
+    expect(typed.commands).toContainEqual({ type: "draft.setText", value: "!" })
+    expect(opened.state.mode).toBe("normal")
+  })
+
   test("leaves shell mode with escape", () => {
     const state = { ...createPromptInputV2InteractionState(), mode: "shell" as const }
     const result = transitionPromptInputV2(

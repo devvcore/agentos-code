@@ -222,7 +222,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
               onAttach={props.controller.attach}
               onCommands={props.controller.openCommands}
               onContext={props.controller.openContext}
-              onShell={props.controller.openShell}
+              onShell={view.shellDisabled?.() ? undefined : props.controller.openShell}
             />
             <Show when={view.agent} keyed>
               {(control) => (
@@ -490,7 +490,7 @@ export function PromptInputV2AddMenu(props: {
   onAttach: () => void
   onCommands: () => void
   onContext: () => void
-  onShell: () => void
+  onShell?: () => void
 }) {
   return (
     <TooltipV2
@@ -525,9 +525,13 @@ export function PromptInputV2AddMenu(props: {
             <MenuV2.Item onSelect={props.onContext} shortcut="@">
               {props.contextLabel}
             </MenuV2.Item>
-            <MenuV2.Item onSelect={props.onShell} shortcut="!">
-              {props.shellLabel}
-            </MenuV2.Item>
+            <Show when={props.onShell}>
+              {(onShell) => (
+                <MenuV2.Item onSelect={onShell()} shortcut="!">
+                  {props.shellLabel}
+                </MenuV2.Item>
+              )}
+            </Show>
           </MenuV2.Content>
         </MenuV2.Portal>
       </MenuV2>

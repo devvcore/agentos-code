@@ -432,6 +432,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     },
     view: {
       placeholder: designPlaceholder,
+      // Omniwork Work mode has no shell entry
+      shellDisabled: () => props.controls.agents.current === "work",
       get agent() {
         return props.controls.agents.visible && props.controls.agents.options.length > 0
           ? {
@@ -477,7 +479,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       title: language.t("command.prompt.mode.shell"),
       category: language.t("command.category.session"),
       keybind: "mod+shift+x",
-      disabled: controller.state.mode === "shell",
+      disabled: controller.state.mode === "shell" || props.controls.agents.current === "work",
       onSelect: () => controller.dispatch({ type: "mode.shell" }),
     },
     {
@@ -489,6 +491,11 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       onSelect: () => controller.dispatch({ type: "mode.normal" }),
     },
   ])
+
+  createEffect(() => {
+    if (props.controls.agents.current === "work" && controller.state.mode === "shell")
+      controller.dispatch({ type: "mode.normal" })
+  })
 
   createEffect(
     on(

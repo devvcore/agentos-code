@@ -69,27 +69,32 @@ export function NewSessionView(props: {
               <Show when={props.project.selected()}>
                 <div class="flex min-h-7 min-w-0 flex-col items-center justify-center gap-0 text-v2-text-text-faint sm:flex-row">
                   <PromptProjectSelector controller={props.project} placement="bottom" />
-                  <Show
-                    when={props.workspace.bar.visible()}
-                    fallback={
-                      <PromptGitStatus branch={props.workspace.bar.branch()} noGit={!props.workspace.project.git()} />
-                    }
-                  >
-                    <PromptWorkspaceSelector
-                      value={props.workspace.selection.value()}
-                      projectRoot={props.workspace.project.root()}
-                      workspaces={props.workspace.project.workspaces()}
-                      branch={props.workspace.bar.branch()}
-                      onChange={props.workspace.selection.set}
-                      onDone={props.input.restoreFocus}
-                    />
+                  {/* Omniwork: Work mode keeps the folder picker but hides git branch/worktree chrome */}
+                  <Show when={local.agent.mode() !== "work"}>
+                    <Show
+                      when={props.workspace.bar.visible()}
+                      fallback={
+                        <PromptGitStatus branch={props.workspace.bar.branch()} noGit={!props.workspace.project.git()} />
+                      }
+                    >
+                      <PromptWorkspaceSelector
+                        value={props.workspace.selection.value()}
+                        projectRoot={props.workspace.project.root()}
+                        workspaces={props.workspace.project.workspaces()}
+                        branch={props.workspace.bar.branch()}
+                        onChange={props.workspace.selection.set}
+                        onDone={props.input.restoreFocus}
+                      />
+                    </Show>
                   </Show>
                 </div>
               </Show>
             </div>
           </div>
         </div>
-        <ProviderTip />
+        <Show when={local.agent.mode() !== "work"}>
+          <ProviderTip />
+        </Show>
       </div>
     </div>
   )
