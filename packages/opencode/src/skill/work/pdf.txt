@@ -1,0 +1,259 @@
+# PDFs
+
+A PDF is built for display, not for editing. Pull out what the user needs accurately, change files without harming the original, and when you produce a PDF, render it and look at it before you hand it over. Never overwrite the input. Write to a new file name.
+
+Nothing is bundled with this skill. Write the snippets below into a scratch directory (for example `.work/`), run them with `python3`, and clean up afterwards.
+
+## Setup and availability
+
+```bash
+python3 -c "import pypdf, pdfplumber; print('pypdf', pypdf.__version__)" || python3 -m pip install --quiet pypdf pdfplumber
+python3 -c "import reportlab" 2>/dev/null || python3 -m pip install --quiet reportlab       # only needed to create PDFs or overlays
+python3 -c "import fitz" 2>/dev/null && echo "PyMuPDF ok"                                  # optional: fast rendering and extraction
+for t in pdftoppm pdftotext qpdf ocrmypdf tesseract soffice markitdown; do printf "%-10s %s\n" $t "$(command -v $t || echo missing)"; done
+```
+
+For OCR you need `ocrmypdf`, or `tesseract` plus `pytesseract`. If neither is installed, say so. Don't guess at the text in a scan.
+
+## Choose the approach
+
+| Task | Approach |
+|---|---|
+| Triage an unknown PDF | Triage script below: pages, encryption, text layer per page, form fields |
+| Read text | `pdfplumber` (`extract_text(layout=True)` keeps columns), `pdftotext -layout`, or `markitdown` |
+| Extract tables | `pdfplumber` `page.extract_tables()` into pandas; check the numbers against the rendered page |
+| Scanned PDF (no text layer) | `ocrmypdf --skip-text in.pdf out.pdf`, else render the pages and run `pytesseract`, else tell the user OCR is not available |
+| Merge, split, reorder, rotate | `pypdf` `PdfWriter` |
+| Watermark or stamp | Make a one-page overlay with reportlab, then `page.merge_page(overlay)` |
+| Password protect or remove a password | `writer.encrypt(...)` / `reader.decrypt(pw)`, with a password the user supplied for their own file |
+| Fill a fillable form | `pypdf` AcroForm: `get_fields`, then `update_page_form_field_values` |
+| Fill a flat (non-fillable) form | Draw text with reportlab at measured coordinates, then merge it onto the page |
+| New PDF document | reportlab platypus for flowing documents, or write a .docx and convert it with `soffice --convert-to pdf` |
+| Compress or repair | `qpdf --linearize --object-streams=generate in.pdf out.pdf`, or `qpdf in.pdf out.pdf` to repair |
+
+## Triage first
+
+```python
+# .work/triage_pdf.py <file.pdf>
+import sys, json
+from pypdf import PdfReader
+r = PdfReader(sys.argv[1])
+if r.is_encrypted and not r.decrypt(""):
+    sys.exit("encrypted: ask the user for the password")
+pages = []
+for i, p in enumerate(r.pages):
+    text = p.extract_text() or ""
+    pages.append({"page": i + 1, "chars": len(text.strip()), "size_pt": [float(p.mediabox.width), float(p.mediabox.height)], "rotate": p.get("/Rotate", 0)})
+fields = r.get_fields() or {}
+print(json.dumps({
+    "pages": len(r.pages),
+    "metadata": {k: str(v) for k, v in (r.metadata or {}).items()},
+    "scanned_pages": [p["page"] for p in pages if p["chars"] < 20],
+    "form_fields": {k: {"type": str(v.get("/FT")), "value": str(v.get("/V")), "states": [str(s) for s in v.get("/_States_", [])]} for k, v in fields.items()},
+    "per_page": pages[:10],
+}, indent=2))
+```
+
+Pages listed in `scanned_pages` have no text layer, so they need OCR. `form_fields` tells you whether the form is fillable.
+
+## Reading text and tables
+
+```python
+import pdfplumber, pandas as pd
+with pdfplumber.open("in.pdf") as pdf:
+    for n, page in enumerate(pdf.pages, 1):
+        text = page.extract_text(layout=True) or ""
+        for t_i, table in enumerate(page.extract_tables()):
+            df = pd.DataFrame(table[1:], columns=table[0])
+            df.to_csv(f".work/p{n}_t{t_i}.csv", index=False)
+```
+
+- Tables without ruling lines often extract badly. Try `page.extract_tables({"vertical_strategy": "text", "horizontal_strategy": "text"})`, or crop first with `page.within_bbox((x0, top, x1, bottom))`.
+- Multi-column layouts: `extract_text(layout=True)` or `pdftotext -layout` keeps the columns apart. Plain extraction can mix lines from different columns together.
+- Numbers come out as strings. Remove thousands separators and treat parentheses as negatives before doing math. Always compare a few extracted values with the rendered page.
+
+## OCR for scans
+
+```bash
+ocrmypdf --skip-text --deskew --output-type pdf in.pdf .work/in_ocr.pdf     # adds a text layer and keeps the page images
+```
+
+Without ocrmypdf, when `tesseract` and `pytesseract` are installed:
+
+```python
+import fitz, pytesseract
+from PIL import Image
+doc = fitz.open("in.pdf")
+for page in doc:
+    pix = page.get_pixmap(dpi=300)
+    img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+    print(f"--- page {page.number + 1}\n", pytesseract.image_to_string(img))
+```
+
+OCR makes mistakes, especially with numbers, names, and handwriting. Tell the user the text came from OCR, and point out values you are unsure of.
+
+## Merge, split, rotate, encrypt
+
+```python
+from pypdf import PdfReader, PdfWriter
+
+w = PdfWriter()                                   # merge
+for f in ["a.pdf", "b.pdf"]:
+    w.append(f)
+w.write("merged.pdf")
+
+r = PdfReader("in.pdf")                           # split into single pages (or ranges)
+for i, page in enumerate(r.pages, 1):
+    part = PdfWriter(); part.add_page(page); part.write(f"page_{i:03}.pdf")
+
+w = PdfWriter(clone_from="in.pdf")                # rotate specific pages clockwise
+for i in (0, 2):
+    w.pages[i].rotate(90)
+w.write("rotated.pdf")
+
+w = PdfWriter(clone_from="in.pdf")                # password (AES-256 needs the 'cryptography' package)
+w.encrypt(user_password="open-pw", owner_password="owner-pw", algorithm="AES-256")
+w.write("protected.pdf")
+```
+
+`w.append(f, pages=(0, 3))` takes a page range. Bookmarks and form fields survive `append`, but links between merged files may not.
+
+## Watermark or stamp
+
+```python
+import io
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+
+def stamp_for(width, height, text="CONFIDENTIAL"):
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=(width, height))
+    c.setFont("Helvetica-Bold", 60); c.setFillGray(0.5, 0.25)          # gray, 25% opacity
+    c.translate(width / 2, height / 2); c.rotate(45); c.drawCentredString(0, 0, text)
+    c.save(); buf.seek(0)
+    return PdfReader(buf).pages[0]
+
+w = PdfWriter(clone_from="in.pdf")
+for page in w.pages:
+    box = page.mediabox
+    stamp = stamp_for(float(box.width), float(box.height))
+    page.merge_translated_page(stamp, float(box.left), float(box.bottom))   # handles boxes that don't start at 0,0
+w.write("watermarked.pdf")
+```
+
+## Creating PDFs
+
+```python
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from xml.sax.saxutils import escape
+
+styles = getSampleStyleSheet()
+doc = SimpleDocTemplate("report.pdf", pagesize=letter, leftMargin=inch, rightMargin=inch, topMargin=inch, bottomMargin=inch,
+                        title="Quarterly Report", author="Finance")
+rows = [["Region", "Revenue"], ["North", "$1.2M"], ["South", "$0.9M"]]
+table = Table(rows, colWidths=[3 * inch, 1.5 * inch], repeatRows=1)
+table.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"), ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.black),
+                           ("ALIGN", (1, 0), (1, -1), "RIGHT"), ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F2F2F2")])]))
+story = [Paragraph("Quarterly Report", styles["Title"]),
+         Paragraph(escape("Revenue grew 12% & margins held at <70%."), styles["BodyText"]),   # Paragraph text is mini-HTML: escape it
+         Spacer(1, 0.2 * inch), table, PageBreak(), Paragraph("Appendix", styles["Heading1"])]
+doc.build(story, onLaterPages=lambda c, d: c.drawRightString(7.5 * inch, 0.5 * inch, f"Page {d.page}"))
+```
+
+- The built-in fonts (Helvetica, Times) only cover Latin-1. For other scripts, curly quotes outside Latin-1, or symbols, register a TTF: `pdfmetrics.registerFont(TTFont("DejaVu", "/path/DejaVuSans.ttf"))` (import `pdfmetrics` from `reportlab.pdfbase` and `TTFont` from `reportlab.pdfbase.ttfonts`). Missing glyphs render as black boxes.
+- For documents with rich formatting, writing a .docx (see the docx skill) and converting it with `soffice --headless --convert-to pdf` is often faster and easier to edit later.
+
+## Filling forms
+
+**Fillable (AcroForm) forms.** Run the triage script first to get the exact field names, types, and checkbox states.
+
+```python
+from pypdf import PdfWriter
+w = PdfWriter(clone_from="form.pdf")
+values = {"full_name": "Jane Doe", "date": "03/03/2026", "agree": "/Yes"}   # checkboxes take the on-state from /_States_
+for page in w.pages:
+    w.update_page_form_field_values(page, values, auto_regenerate=False)
+w.set_need_appearances_writer(True)            # tells viewers to redraw the field appearances
+w.write("form_filled.pdf")
+```
+
+Use the field names exactly as `get_fields()` reports them, including any dotted parent prefixes. Unknown names are silently ignored, so check the result (see VERIFY).
+
+**Flat forms (no fields).** Find where the labels sit, then draw text next to them.
+
+```python
+import io, pdfplumber
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas
+
+with pdfplumber.open("flat.pdf") as pdf:                      # coordinates of labels, top-left origin
+    page = pdf.pages[0]
+    for w_ in page.extract_words():
+        if w_["text"].rstrip(":") in {"Name", "Date", "Signature"}:
+            print(w_["text"], round(w_["x0"]), round(w_["x1"]), round(w_["top"]), round(w_["bottom"]), "page_h", page.height)
+
+entries = [(0, "Jane Doe", 150, 702), (0, "03/03/2026", 420, 702)]   # (page, text, x, y) with y measured from the BOTTOM (PDF points)
+src = PdfReader("flat.pdf"); w = PdfWriter(clone_from=src)
+for idx, page in enumerate(w.pages):
+    items = [e for e in entries if e[0] == idx]
+    if not items:
+        continue
+    buf = io.BytesIO(); box = page.mediabox
+    c = canvas.Canvas(buf, pagesize=(float(box.width), float(box.height))); c.setFont("Helvetica", 10)
+    for _, text, x, y in items:
+        c.drawString(x, y, text)
+    c.save(); buf.seek(0)
+    page.merge_translated_page(PdfReader(buf).pages[0], float(box.left), float(box.bottom))
+w.write("flat_filled.pdf")
+```
+
+pdfplumber measures `top` from the top of the page, while reportlab measures `y` from the bottom, so use `y = page.height - bottom + 2` to sit on the baseline of a label's line. Put `x` just past the label's `x1`, or over the blank line or box (`page.rects` and `page.lines` give you their positions). Render the result and adjust until the text sits cleanly in every box. Rotated pages (`/Rotate`) need their coordinates transformed, or should be rotated to 0 first.
+
+## Common pitfalls
+
+- Assuming there's a text layer. Scans return empty text, and some PDFs return garbled text because of font encodings. When extraction looks wrong, render the page and compare.
+- Table extraction merging or splitting columns. Always check the totals against the rendered page.
+- Overwriting the input, or losing form fields and bookmarks by rebuilding page by page. Prefer `PdfWriter(clone_from=...)`.
+- Form values set on the wrong field name, which fails silently.
+- Unescaped `&` or `<` in reportlab `Paragraph` text breaks the build or drops text.
+- Mixing up the two coordinate systems (top-left for pdfplumber, bottom-left for PDF and reportlab), or ignoring a mediabox that doesn't start at 0,0.
+- Removing passwords or restrictions from a file the user doesn't own. Only work with passwords the user supplies for their own documents.
+
+## VERIFY (mandatory before you say you're done)
+
+### 1. Reopen and check the output
+
+```python
+# .work/check_pdf.py <out.pdf> [expected_pages] [expected text ...]
+import sys, json
+from pypdf import PdfReader
+path, expect_pages, needles = sys.argv[1], (int(sys.argv[2]) if len(sys.argv) > 2 else None), sys.argv[3:]
+r = PdfReader(path)
+text = "\n".join((p.extract_text() or "") for p in r.pages)
+fields = {k: str(v.get("/V")) for k, v in (r.get_fields() or {}).items()}
+report = {
+    "pages": len(r.pages), "page_count_ok": expect_pages is None or len(r.pages) == expect_pages,
+    "encrypted": r.is_encrypted, "text_chars": len(text.strip()),
+    "missing_text": [n for n in needles if n not in text and n not in fields.values()],
+    "form_fields": fields,
+}
+print(json.dumps(report, indent=2))
+```
+
+Pass the values you wrote (names, dates, headings) as `expected text`. `missing_text` must be empty. For merges and splits, the page count must equal the sum of the inputs or the intended range. For encryption, confirm that `encrypted` is true and that the file opens with the password (`PdfReader(path).decrypt(pw)` returns non-zero).
+
+### 2. Render and look
+
+```bash
+mkdir -p .work/render && pdftoppm -png -r 70 out.pdf .work/render/page
+```
+
+Without poppler, use PyMuPDF: `import fitz; [p.get_pixmap(dpi=70).save(f".work/render/page-{p.number + 1}.png") for p in fitz.open("out.pdf")]`. On macOS only, `qlmanage -t -s 1200 -o .work/render out.pdf` renders the first page. Look at every page you changed or created: filled values sitting inside their boxes, watermark placement, rotation, table layout, fonts (no black boxes), and no blank pages. If nothing can render the file, tell the user that the visual check was not done.
+
+### 3. Report to the user
+
+Tell the user where the file is, the page count, what you changed or extracted, whether OCR was used, and anything you could not verify.

@@ -14,6 +14,7 @@ import PROMPT_COMPACTION from "./prompt/compaction.txt"
 import PROMPT_EXPLORE from "./prompt/explore.txt"
 import PROMPT_SUMMARY from "./prompt/summary.txt"
 import PROMPT_TITLE from "./prompt/title.txt"
+import PROMPT_WORK from "./prompt/work.txt"
 import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
@@ -176,6 +177,16 @@ const layer = Layer.effect(
               }),
               user,
             ),
+            mode: "primary",
+            native: true,
+          },
+          work: {
+            name: "work",
+            description:
+              "Omniwork. Knowledge work on your files: spreadsheets, documents, slide decks, PDFs, data analysis, and research.",
+            prompt: PROMPT_WORK,
+            options: {},
+            permission: Permission.merge(defaults, Permission.fromConfig({ question: "allow" }), user),
             mode: "primary",
             native: true,
           },

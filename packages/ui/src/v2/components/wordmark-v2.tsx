@@ -1,7 +1,7 @@
 import { createUniqueId, type ComponentProps } from "solid-js"
 import { OmniWordmarkPaths } from "../../components/omni-wordmark"
 
-export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
+export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class"> & { variant?: "code" | "work" }) {
   const mask = createUniqueId()
   const maskGradient = createUniqueId()
 
@@ -16,8 +16,13 @@ export function WordmarkV2(props: Pick<ComponentProps<"svg">, "class">) {
         <g mask={`url(#${mask})`}>
           <g opacity="0.16">
             {import.meta.env.VITE_AGENTOS_CODE === "1" ? (
-              <g transform="scale(18.461538)" opacity="0.7">
-                <OmniWordmarkPaths />
+              // "omniwork" is 41 units wide vs 39 for "omnicode": scale it to the same width and
+              // shift it down so both variants share the baseline under the fade mask.
+              <g
+                transform={props.variant === "work" ? "translate(0 5.402689) scale(17.560976)" : "scale(18.461538)"}
+                opacity="0.7"
+              >
+                <OmniWordmarkPaths variant={props.variant} />
               </g>
             ) : (
               <>

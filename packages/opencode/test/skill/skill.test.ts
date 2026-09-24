@@ -305,6 +305,53 @@ description: A skill in the .claude/skills directory.
     ),
   )
 
+  it.live("registers built-in skills with content", () =>
+    provideTmpdirInstance(
+      () =>
+        Effect.gen(function* () {
+          const skill = yield* Skill.Service
+          const builtIns = (yield* skill.all()).filter((s) => s.location === "<built-in>")
+          expect(builtIns.map((s) => s.name).toSorted()).toEqual(
+            ["customize-opencode", "docx", "pdf", "pptx", "xlsx"].toSorted(),
+          )
+          for (const item of builtIns) {
+            expect(item.description?.length).toBeGreaterThan(0)
+            expect(item.content.trim().length).toBeGreaterThan(500)
+            expect(item.content.startsWith("---")).toBe(false)
+          }
+        }),
+      { git: true },
+    ),
+  )
+
+  it.live("disk skill overrides a built-in skill with the same name", () =>
+    provideTmpdirInstance(
+      (dir) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            Bun.write(
+              path.join(dir, ".opencode", "skill", "xlsx", "SKILL.md"),
+              `---
+name: xlsx
+description: Custom spreadsheet skill.
+---
+
+# Custom xlsx
+`,
+            ),
+          )
+
+          const skill = yield* Skill.Service
+          const item = yield* skill.require("xlsx")
+          expect(item.description).toBe("Custom spreadsheet skill.")
+          expect(item.location).toContain(path.join("skill", "xlsx", "SKILL.md"))
+          expect(item.content).toContain("# Custom xlsx")
+          expect((yield* skill.all()).filter((s) => s.name === "xlsx").length).toBe(1)
+        }),
+      { git: true },
+    ),
+  )
+
   it.live("fails with typed error when requiring a missing skill", () =>
     provideTmpdirInstance(
       () =>

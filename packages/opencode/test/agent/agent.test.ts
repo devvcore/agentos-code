@@ -50,6 +50,7 @@ it.instance("returns default native agents when no config", () =>
     const names = agents.map((a) => a.name)
     expect(names).toContain("build")
     expect(names).toContain("plan")
+    expect(names).toContain("work")
     expect(names).toContain("general")
     expect(names).toContain("explore")
     expect(names).toContain("compaction")
@@ -66,6 +67,22 @@ it.instance("build agent has correct default properties", () =>
     expect(build?.native).toBe(true)
     expect(evalPerm(build, "edit")).toBe("allow")
     expect(evalPerm(build, "bash")).toBe("allow")
+  }),
+)
+
+it.instance("work agent is a visible native primary agent and build stays default", () =>
+  Effect.gen(function* () {
+    const work = yield* load((svc) => svc.get("work"))
+    expect(work).toBeDefined()
+    expect(work?.mode).toBe("primary")
+    expect(work?.native).toBe(true)
+    expect(work?.hidden).not.toBe(true)
+    expect(work?.prompt?.startsWith("You are Omniwork")).toBe(true)
+    expect(evalPerm(work, "question")).toBe("allow")
+    expect(evalPerm(work, "plan_enter")).toBe("deny")
+    expect(evalPerm(work, "edit")).toBe("allow")
+    expect(yield* load((svc) => svc.defaultAgent())).toBe("build")
+    expect((yield* load((svc) => svc.list()))[0].name).toBe("build")
   }),
 )
 
@@ -749,6 +766,7 @@ it.instance(
       agent: {
         build: { disable: true },
         plan: { disable: true },
+        work: { disable: true },
       },
     },
   },

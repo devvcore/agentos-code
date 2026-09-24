@@ -5,3 +5,12 @@ export function hasCustomAgent(items: Array<{ native?: boolean }>) {
 export function resolveAgent<T extends { name: string }>(items: T[], name?: string) {
   return items.find((item) => item.name === name) ?? items.find((item) => item.name === "build") ?? items[0]
 }
+
+// With custom agents hidden the app only exposes the Code (build) and Work (work) modes.
+export function selectAgent<T extends { name: string }>(items: T[], name: string | undefined, visible: boolean) {
+  return resolveAgent(items, visible || name === "work" ? name : "build")
+}
+
+export function hasWorkAgent(items: Array<{ name: string }>) {
+  return items.some((item) => item.name === "work")
+}

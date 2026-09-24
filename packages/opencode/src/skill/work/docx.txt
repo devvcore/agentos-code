@@ -1,0 +1,284 @@
+# Word documents (.docx)
+
+A good Word deliverable uses the document's own styles, has real headings (so the navigation pane and table of contents work), contains no leftover placeholders, and looks right when rendered. When you edit someone else's document, change only what was asked and leave the rest of it exactly as it was.
+
+Nothing is bundled with this skill. Write the snippets below into a scratch directory (for example `.work/`), run them with `python3`, and clean up afterwards.
+
+## Setup and availability
+
+```bash
+python3 -c "import docx; print('python-docx', docx.__version__)" || python3 -m pip install --quiet python-docx
+command -v pandoc; command -v markitdown                # optional readers
+command -v soffice || ls /Applications/LibreOffice.app/Contents/MacOS/soffice 2>/dev/null   # optional: DOCX -> PDF
+command -v pdftoppm || python3 -c "import fitz" 2>/dev/null && echo "renderer ok"         # optional: PDF -> PNG
+```
+
+If a tool is missing, use the next option down. When nothing can render the document, say that the visual check could not be done.
+
+## Choose the approach
+
+| Task | Approach |
+|---|---|
+| Read or summarize a .docx | `pandoc in.docx -t markdown` (add `--track-changes=all` to see revisions), else `markitdown`, else the python-docx dump below |
+| New document from scratch | python-docx, built-in styles (`Title`, `Heading 1-3`, `List Bullet`, `List Number`, `Table Grid`) |
+| New document that must match a brand or template | `Document("template.docx")`, remove the sample body content, then write with the template's style names |
+| Fill a template with `{{placeholders}}` | Cross-run replace (below) across body, tables, headers, and footers |
+| Small text edit in an existing document | python-docx cross-run replace; keep the run formatting |
+| Edits the user must be able to review (redlines) | Tracked changes through OOXML (`w:ins` / `w:del`) |
+| Reviewer notes | Comments: `doc.add_comment(...)` (python-docx 1.2 or later), else OOXML |
+| Convert to PDF | `soffice --headless --convert-to pdf` |
+| Markdown to a Word document | `pandoc in.md -o out.docx --reference-doc=template.docx` when pandoc is available |
+
+## Reading
+
+```python
+# .work/dump_docx.py <file.docx>: structure with style names, so you can see how the doc is built
+import sys, docx
+d = docx.Document(sys.argv[1])
+for i, p in enumerate(d.paragraphs):
+    if p.text.strip():
+        print(f"{i:4} [{p.style.name}] {p.text[:120]}")
+for t_i, t in enumerate(d.tables):
+    print(f"-- table {t_i}: {len(t.rows)}x{len(t.columns)} style={t.style.name if t.style else None}")
+    for r in t.rows[:4]:
+        print("   ", [c.text[:25] for c in r.cells])
+for s_i, s in enumerate(d.sections):
+    print(f"-- section {s_i}: header={[p.text for p in s.header.paragraphs if p.text]} footer={[p.text for p in s.footer.paragraphs if p.text]}")
+print("paragraph styles:", sorted({s.name for s in d.styles if s.type == 1})[:40])
+```
+
+`d.paragraphs` skips text inside tables, text boxes, and content controls. If the text you see is missing something, fall back to `pandoc` or grep `word/document.xml` directly (`unzip -p f.docx word/document.xml`).
+
+## Creating with python-docx
+
+```python
+from docx import Document
+from docx.shared import Pt, Inches
+from docx.enum.text import WD_BREAK
+from docx.enum.section import WD_ORIENT
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+doc = Document()                       # or Document("template.docx") to inherit its styles
+doc.add_paragraph("Quarterly Review", style="Title")
+doc.add_heading("Summary", level=1)    # real Heading 1: shows in the navigation pane and the TOC
+doc.add_paragraph("Revenue grew 12% on higher volume.")
+for item in ["Margin up 2 pts", "Churn flat"]:
+    doc.add_paragraph(item, style="List Bullet")
+
+rows = [("Region", "Revenue"), ("North", "$1.2M"), ("South", "$0.9M")]
+table = doc.add_table(rows=len(rows), cols=2)
+table.style = "Table Grid"
+for r, values in enumerate(rows):
+    for c, v in enumerate(values):
+        table.cell(r, c).text = v
+for cell in table.rows[0].cells:
+    cell.paragraphs[0].runs[0].bold = True
+
+doc.add_picture("chart.png", width=Inches(6))   # keep images inside the text width
+doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
+
+footer = doc.sections[0].footer.paragraphs[0]    # page number field
+run = footer.add_run()
+for tag, text in (("begin", None), (None, "PAGE"), ("end", None)):
+    el = OxmlElement("w:fldChar" if tag else "w:instrText")
+    if tag:
+        el.set(qn("w:fldCharType"), tag)
+    else:
+        el.set(qn("xml:space"), "preserve"); el.text = text
+    run._r.append(el)
+doc.save("report.docx")
+```
+
+- Style with the document's styles, not direct formatting. If a style you need is missing, check `[s.name for s in doc.styles]`. A template may name its styles differently ("Heading1", a localized name, or a custom "Body").
+- Don't hardcode fonts or sizes on each run. Change the style instead, for example `doc.styles["Normal"].font.name = "Calibri"`, and only in new documents.
+- Table of contents: Word builds the TOC from a field. Insert a `TOC \o "1-3" \h \z \u` field the same way as the PAGE field above. Word fills it in when the user updates fields (F9), and LibreOffice fills it in during PDF conversion. Tell the user that it updates on open.
+- Landscape section: `s = doc.add_section(); s.orientation = WD_ORIENT.LANDSCAPE; s.page_width, s.page_height = s.page_height, s.page_width`.
+- Numbered lists restart unpredictably with python-docx. For legal-style numbering, use the template's existing list styles.
+
+## Editing existing documents: cross-run find and replace
+
+Word splits visible text into many runs (spell-check marks, revision IDs, formatting changes), so `{{client_name}}` can be spread over three runs and `run.text.replace` will miss it. The function below replaces across runs and keeps the first run's formatting.
+
+```python
+import docx
+
+def replace_in_paragraph(p, old, new):
+    count, offset = 0, 0
+    while True:
+        runs = p.runs
+        text = "".join(r.text for r in runs)
+        i = text.find(old, offset)
+        if i < 0:
+            return count
+        j, pos, first = i + len(old), 0, True
+        for r in runs:
+            start, end = pos, pos + len(r.text)
+            pos = end
+            if end <= i or start >= j:
+                continue
+            if first:
+                r.text = r.text[: i - start] + new + (r.text[j - start:] if end >= j else "")
+                first = False
+            else:
+                r.text = r.text[j - start:] if end > j else ""
+        count, offset = count + 1, i + len(new)
+
+def all_paragraphs(doc):
+    def walk(container):
+        yield from container.paragraphs
+        for t in getattr(container, "tables", []):
+            for row in t.rows:
+                for cell in row.cells:
+                    yield from walk(cell)
+    yield from walk(doc)
+    for s in doc.sections:
+        for part in (s.header, s.footer, s.first_page_header, s.first_page_footer, s.even_page_header, s.even_page_footer):
+            if not part.is_linked_to_previous:     # reading a missing header would create one
+                yield from walk(part)
+
+doc = docx.Document("template.docx")
+values = {"{{client_name}}": "Acme Corp", "{{date}}": "March 3, 2026"}
+hits = {k: sum(replace_in_paragraph(p, k, v) for p in all_paragraphs(doc)) for k, v in values.items()}
+print(hits)            # any 0 here means the placeholder was not found; investigate before you deliver
+doc.save("filled.docx")
+```
+
+`p.runs` does not include text inside hyperlinks, text boxes, or content controls. If a placeholder stays unfound, look for it in the raw XML.
+
+## Tracked changes (redlines)
+
+Use tracked changes when the user wants to review edits, and always for contracts and anything legal. python-docx cannot create revisions, so edit `word/document.xml` directly. A deletion is `<w:del>` wrapping a run whose text is in `<w:delText>`. An insertion is `<w:ins>` wrapping a normal run. Both need a unique `w:id`, a `w:author`, and a `w:date`. Split the original run so that only the changed words go into the revision, and copy its `w:rPr` into every piece.
+
+```python
+# .work/redline.py: tracked replacement of exact phrases, keeping everything else byte-for-byte
+import copy, zipfile, datetime
+from lxml import etree
+
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+q = lambda t: f"{{{W}}}{t}"
+XML_SPACE = "{http://www.w3.org/XML/1998/namespace}space"
+
+def merge_runs(root):
+    """Merge adjacent plain-text runs with identical formatting so phrases aren't split across runs."""
+    for e in list(root.iter(q("proofErr"))):
+        e.getparent().remove(e)
+    for p in root.iter(q("p")):
+        prev = None
+        for r in list(p.findall(q("r"))):
+            kids = [k for k in r if k.tag != q("rPr")]
+            simple = len(kids) == 1 and kids[0].tag == q("t")
+            key = etree.tostring(r.find(q("rPr"))) if r.find(q("rPr")) is not None else b""
+            if simple and prev is not None and prev[1] == key and r.getprevious() is prev[0]:
+                pt = prev[0].find(q("t"))
+                pt.text = (pt.text or "") + (kids[0].text or "")
+                pt.set(XML_SPACE, "preserve")
+                p.remove(r)
+                continue
+            prev = (r, key) if simple else None
+
+def tracked_replace(root, old, new, author, date, next_id):
+    for t in root.iter(q("t")):
+        r = t.getparent()
+        if old not in (t.text or "") or r.tag != q("r") or r.getparent().tag in (q("ins"), q("del")):
+            continue
+        before, after = t.text.split(old, 1)
+        rpr = r.find(q("rPr"))
+        def run(text, tag="t"):
+            nr = etree.Element(q("r"))
+            if rpr is not None:
+                nr.append(copy.deepcopy(rpr))
+            el = etree.SubElement(nr, q(tag)); el.text = text; el.set(XML_SPACE, "preserve")
+            return nr
+        attrs = lambda n: {q("id"): str(n), q("author"): author, q("date"): date}
+        d = etree.Element(q("del"), attrs(next_id))
+        d.append(run(old, "delText"))
+        ins = etree.Element(q("ins"), attrs(next_id + 1))
+        ins.append(run(new))
+        parts = ([run(before)] if before else []) + [d] + ([ins] if new else []) + ([run(after)] if after else [])
+        parent, idx = r.getparent(), r.getparent().index(r)
+        parent.remove(r)
+        for k, part in enumerate(parts):
+            parent.insert(idx + k, part)
+        return next_id + 2
+    return None
+
+src, dst = "contract.docx", "contract_redline.docx"
+edits = [("30 days", "45 days"), ("State of New York", "State of Delaware")]
+author, date = "Omniwork", datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+with zipfile.ZipFile(src) as z:
+    root = etree.fromstring(z.read("word/document.xml"))
+    merge_runs(root)
+    next_id = 9000 + max([int(v) for v in root.xpath("//@w:id", namespaces={"w": W}) if v.lstrip("-").isdigit()] + [0])
+    for old, new in edits:
+        n = 0
+        while (res := tracked_replace(root, old, new, author, date, next_id)) is not None:
+            next_id, n = res, n + 1
+        print(f"{old!r} -> {new!r}: {n} change(s)")    # 0 means not found: check the spelling or the run split
+    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as out:
+        for item in z.infolist():
+            data = etree.tostring(root, xml_declaration=True, encoding="UTF-8", standalone=True) if item.filename == "word/document.xml" else z.read(item.filename)
+            out.writestr(item, data)
+```
+
+Use the user's name as `author` if you know it. Replace a whole word or phrase rather than single characters, because redlines that change part of a word are hard to read. `merge_runs` only merges runs with identical formatting, so a phrase that spans a formatting change (for example half bold) still won't match. Handle that case by hand. `lxml` ships as a dependency of python-docx.
+
+## Comments
+
+```python
+import docx
+doc = docx.Document("in.docx")
+p = next(p for p in doc.paragraphs if "indemnify" in p.text)
+doc.add_comment(p.runs, text="Consider capping liability at 12 months of fees.", author="Omniwork", initials="OW")  # python-docx 1.2 or later
+doc.save("in_commented.docx")
+```
+
+On older python-docx, either upgrade it or add the comments in OOXML. That needs a `word/comments.xml` part, a relationship in `word/_rels/document.xml.rels`, a content-type override in `[Content_Types].xml`, and `w:commentRangeStart`, `w:commentRangeEnd`, and `w:commentReference` in the body. Upgrading is much less error-prone.
+
+## Common pitfalls
+
+- Direct formatting on every run (fonts and sizes everywhere) instead of styles, which makes the document impossible to restyle.
+- Fake headings (bold Normal text), which leave an empty TOC and navigation pane.
+- Rebuilding an existing document from scratch loses its styles, numbering, headers, section breaks, and fields. Edit in place.
+- Placeholders split across runs look replaced in `p.text`, but the file is unchanged. Always check the hit counts.
+- Images wider than the text area. Use `width=Inches(6)` for Letter or A4 with default margins.
+- Straight quotes in a document that uses curly quotes. Match the typography that is already there.
+- Overwriting the original. Save to a new name unless told otherwise.
+
+## VERIFY (mandatory before you say you're done)
+
+### 1. Structural check
+
+```python
+# .work/check_docx.py <out.docx>
+import sys, re, json, zipfile, docx
+path = sys.argv[1]
+d = docx.Document(path)                                    # raises if the package is corrupt
+xml = zipfile.ZipFile(path).read("word/document.xml").decode("utf8")
+text = "\n".join(p.text for p in d.paragraphs) + "\n" + "\n".join(c.text for t in d.tables for r in t.rows for c in r.cells)
+leftovers = sorted(set(re.findall(r"\{\{.*?\}\}|\[\[.*?\]\]|\bTODO\b|\bTBD\b|\bXXX+\b|[Ll]orem ipsum|<insert[^>]*>|\[(?:Name|Date|Company|Client)\]", text)))
+report = {
+    "paragraphs": len(d.paragraphs), "tables": len(d.tables),
+    "headings": [p.text[:60] for p in d.paragraphs if p.style.name.startswith("Heading")][:30],
+    "leftover_placeholders": leftovers,
+    "empty_headings": [i for i, p in enumerate(d.paragraphs) if p.style.name.startswith("Heading") and not p.text.strip()],
+    "tracked_insertions": xml.count("<w:ins "), "tracked_deletions": xml.count("<w:del "),
+}
+print(json.dumps(report, indent=2))
+```
+
+`leftover_placeholders` must be empty, unless a placeholder is intentional and you tell the user. For redlines, the insertion and deletion counts must match the edits you intended. When pandoc is available, `pandoc out.docx -t plain --track-changes=all | head -80` shows the revisions in context.
+
+### 2. Visual check (render and look)
+
+```bash
+mkdir -p .work/render
+soffice --headless --convert-to pdf --outdir .work/render out.docx          # or the full path to LibreOffice's soffice on macOS
+pdftoppm -png -r 80 .work/render/out.pdf .work/render/page                  # or PyMuPDF: page.get_pixmap(dpi=80).save(...)
+```
+
+Look at the page images: headings, tables that don't run off the page, images, headers and footers, page breaks where intended, no blank pages. Rendering is done by LibreOffice, so small font or spacing differences from Word are normal. Broken layout is not. If LibreOffice is not installed, macOS can make a first-page preview with `qlmanage -t -s 1200 -o .work/render out.docx`. Otherwise tell the user that you checked the document's structure but could not render it.
+
+### 3. Report to the user
+
+Tell the user where the file is, what changed (for edits, a short list of changes and how many redlines), what you checked, and anything you could not verify.

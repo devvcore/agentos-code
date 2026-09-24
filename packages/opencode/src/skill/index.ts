@@ -17,6 +17,10 @@ import { Glob } from "@opencode-ai/core/util/glob"
 import { Discovery } from "./discovery"
 import { isRecord } from "@/util/record"
 import { escapeHtml } from "@/util/html"
+import WORK_XLSX from "./work/xlsx.txt"
+import WORK_DOCX from "./work/docx.txt"
+import WORK_PPTX from "./work/pptx.txt"
+import WORK_PDF from "./work/pdf.txt"
 
 const CLAUDE_EXTERNAL_DIR = ".claude"
 const AGENTS_EXTERNAL_DIR = ".agents"
@@ -24,15 +28,48 @@ const EXTERNAL_SKILL_PATTERN = "skills/**/SKILL.md"
 const OPENCODE_SKILL_PATTERN = "{skill,skills}/**/SKILL.md"
 const SKILL_PATTERN = "**/SKILL.md"
 
-// Built-in skill that ships with opencode. The model's intuition for what an
-// opencode.json should look like is often wrong, and opencode hard-fails on
-// invalid config, so users hit cryptic startup errors. Loading this skill
-// when the model is asked to touch opencode's own config files gives it the
-// actual schemas instead of guesses.
-const CUSTOMIZE_OPENCODE_SKILL_NAME = "customize-opencode"
-const CUSTOMIZE_OPENCODE_SKILL_DESCRIPTION =
-  "Use ONLY when the user is editing or creating opencode's own configuration: opencode.json, opencode.jsonc, files under .opencode/, or files under ~/.config/opencode/. Also use when creating or fixing opencode agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring opencode itself."
-const CUSTOMIZE_OPENCODE_SKILL_BODY = SkillPlugin.CustomizeOpencodeContent
+// Built-in skills, registered before disk discovery so a disk skill with the
+// same name overrides them.
+//
+// customize-opencode: the model's intuition for what an opencode.json should
+// look like is often wrong, and opencode hard-fails on invalid config, so users
+// hit cryptic startup errors. Loading this skill when the model is asked to
+// touch opencode's own config files gives it the actual schemas instead of
+// guesses.
+//
+// xlsx, docx, pptx, pdf: office-file skills used by the Omniwork `work` agent.
+const BUILT_IN_SKILLS = [
+  {
+    name: "customize-opencode",
+    description:
+      "Use ONLY when the user is editing or creating opencode's own configuration: opencode.json, opencode.jsonc, files under .opencode/, or files under ~/.config/opencode/. Also use when creating or fixing opencode agents, subagents, skills, plugins, MCP servers, or permission rules. Do not use for the user's own application code, or for any project that is not configuring opencode itself.",
+    content: SkillPlugin.CustomizeOpencodeContent,
+  },
+  {
+    name: "xlsx",
+    description:
+      "Use whenever a spreadsheet is the input or output: creating, reading, editing, analyzing, or fixing .xlsx, .xlsm, .csv, or .tsv files, including financial models, budgets, trackers, pivot-style summaries, and charts in Excel. Trigger even when the user mentions a spreadsheet casually. Not for Google Sheets APIs or when the deliverable is a Word/PDF report.",
+    content: WORK_XLSX,
+  },
+  {
+    name: "docx",
+    description:
+      "Use whenever a Word document is the input or output: creating, reading, or editing .docx files, reports, memos, letters, contracts, templates, tracked changes, and comments. Not for PDFs, spreadsheets, or Google Docs.",
+    content: WORK_DOCX,
+  },
+  {
+    name: "pptx",
+    description:
+      "Use whenever a slide deck is the input or output: creating, reading, or editing .pptx files, pitch decks, presentations, speaker notes, and templates.",
+    content: WORK_PPTX,
+  },
+  {
+    name: "pdf",
+    description:
+      "Use whenever a PDF is the input or output: extracting text or tables, merging, splitting, rotating, watermarking, filling forms, OCR of scans, or generating a new PDF.",
+    content: WORK_PDF,
+  },
+]
 
 export const Info = Schema.Struct({
   name: Schema.String,
@@ -273,14 +310,9 @@ const layer = Layer.effect(
     const state = yield* InstanceState.make(
       Effect.fn("Skill.state")(function* () {
         const s: State = { skills: {}, dirs: new Set() }
-        // Register the built-in skill BEFORE disk discovery so a user-disk
-        // skill with the same name can override it.
-        s.skills[CUSTOMIZE_OPENCODE_SKILL_NAME] = {
-          name: CUSTOMIZE_OPENCODE_SKILL_NAME,
-          description: CUSTOMIZE_OPENCODE_SKILL_DESCRIPTION,
-          location: "<built-in>",
-          content: CUSTOMIZE_OPENCODE_SKILL_BODY,
-        }
+        // Register built-in skills BEFORE disk discovery so a user-disk
+        // skill with the same name can override them.
+        for (const skill of BUILT_IN_SKILLS) s.skills[skill.name] = { ...skill, location: "<built-in>" }
         yield* loadSkills(s, yield* InstanceState.get(discovered), events)
         return s
       }),

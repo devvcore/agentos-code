@@ -1,0 +1,239 @@
+# Spreadsheets (.xlsx, .xlsm, .csv, .tsv)
+
+A spreadsheet someone will reuse has to stay live. Put the logic in formulas so the user can change an input and watch it flow through. Deliver zero formula errors, formatting that matches the workbook's existing conventions, and a short note on what you checked.
+
+Nothing is bundled with this skill. Write the snippets below into a scratch directory (for example `mkdir -p .work`), run them with `python3`, and delete them afterwards unless the user wants to keep them.
+
+## Setup and availability
+
+```bash
+python3 -c "import openpyxl, pandas; print('openpyxl', openpyxl.__version__, 'pandas', pandas.__version__)" \
+  || python3 -m pip install --quiet openpyxl pandas
+# LibreOffice is only used to recalculate and check formulas. It is optional.
+command -v soffice || ls /Applications/LibreOffice.app/Contents/MacOS/soffice 2>/dev/null || echo "no soffice"
+```
+
+If `pip install` fails (offline, managed Python), try `python3 -m pip install --user ...` or a venv (`python3 -m venv .work/venv`). If a tool is still missing, keep going with what you have and tell the user exactly which check you could not run.
+
+## Choose the approach
+
+| Task | Approach |
+|---|---|
+| Look at an unfamiliar workbook | Inspect script below: sheets, used ranges, headers, formula counts, a sample of formulas |
+| Analyze data or answer a question | `pandas.read_excel(sheet_name=None)` / `read_csv`; report the numbers. Only write a file if the user wants one |
+| New formatted report or model | Build with `openpyxl`, formulas for every derived number, then run VERIFY |
+| Edit an existing workbook | `openpyxl.load_workbook(path)`, change only the target cells, keep the existing styles, save under a new name unless told to overwrite |
+| Clean messy CSV/TSV | pandas with explicit `dtype`, `encoding`, and `sep`; write the cleaned copy next to the original |
+| Big data (more than ~200k rows) | Analyze in pandas, write summary tables to the workbook, and keep raw data in a CSV next to it |
+| Chart in Excel | `openpyxl.chart` (native, editable chart), not an embedded PNG |
+| Macro-enabled `.xlsm` | `load_workbook(path, keep_vba=True)` and save as `.xlsm` |
+
+## Library choices
+
+- **openpyxl** writes and edits `.xlsx`: formulas, styles, number formats, freeze panes, validation, conditional formatting, charts. It never calculates formulas.
+- **pandas** reads and analyzes data. When pandas writes a sheet (`to_excel`), you get plain values with no styling, so use it for staging data, not for the final formatted output.
+- **LibreOffice (`soffice`)** is the only local way to calculate formulas without Excel. You need it to prove that there are no `#REF!` or `#DIV/0!` errors.
+- Do not use `xlsxwriter` to edit an existing file. It can only create new files.
+
+## Inspect before you touch
+
+```python
+# .work/inspect.py <file.xlsx>
+import sys, openpyxl
+wb = openpyxl.load_workbook(sys.argv[1])  # formulas as strings
+for ws in wb.worksheets:
+    formulas = [c for row in ws.iter_rows() for c in row if isinstance(c.value, str) and c.value.startswith("=")]
+    print(f"== {ws.title}  dims={ws.dimensions}  max_row={ws.max_row} max_col={ws.max_column}  formulas={len(formulas)}  freeze={ws.freeze_panes}")
+    for row in ws.iter_rows(min_row=1, max_row=min(ws.max_row, 6), values_only=True):
+        print("  ", row[:12])
+    for c in formulas[:8]:
+        print("   f:", c.coordinate, c.value, "| font", c.font.color.rgb if c.font.color is not None and c.font.color.type == "rgb" else None, "| fmt", c.number_format)
+print("defined names:", list(wb.defined_names.keys()) if hasattr(wb.defined_names, "keys") else wb.defined_names)
+```
+
+Take note of the conventions already in use (fonts, fill colors, number formats, where the inputs live) and follow them. Conventions already in a workbook win over the defaults in this skill.
+
+## Formulas, not pasted results
+
+- Every derived number is a formula: totals, growth, ratios, lookups. If you calculated a value in Python and typed it into a cell, the model is dead.
+- Hardcode only real inputs, and keep them in one place (an `Assumptions` sheet or an input block at the top), labeled, with units and a source.
+- Never put magic numbers inside formulas. `=B5*1.05` is wrong. `=B5*(1+Assumptions!$C$4)` is right.
+- Use absolute references (`$C$4`) for single assumption cells, and relative references for anything that fills across rows or columns.
+- Stay compatible with older Excel. Prefer `SUMIFS`, `COUNTIFS`, `INDEX/MATCH`, `IFERROR`, and `SUMPRODUCT`. Avoid dynamic-array functions such as `XLOOKUP`, `FILTER`, `SORT`, `UNIQUE`, `SEQUENCE`, and `LET` unless the user confirms Microsoft 365 or Excel 2021 or later. openpyxl also writes them without the `_xlfn.` prefix, so they can show up as `#NAME?`.
+- Guard divisions that can hit zero: `=IF(C5=0,0,B5/C5)` or `=IFERROR(B5/C5,0)`. Only wrap in IFERROR where an error really is expected. Blanket IFERROR hides real mistakes.
+- Keep formulas uniform across a row. A single hand-edited cell in a filled range is the most common hidden bug.
+- Write formulas in English with comma separators, for example `=SUM(B2:B10)`. openpyxl stores them as-is.
+
+## Building with openpyxl
+
+```python
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+from openpyxl.utils import get_column_letter
+
+wb = Workbook()
+a = wb.active; a.title = "Assumptions"
+a.append(["Assumption", "Value", "Unit", "Source"])
+a.append(["Revenue growth", 0.08, "%/yr", "Mgmt plan FY25"])
+a.append(["Starting revenue", 1_200_000, "USD", "FY24 actuals"])
+for c in ("B2", "B3"):
+    a[c].font = Font(color="0000FF")            # blue = hardcoded input
+a["B2"].number_format = "0.0%"
+a["B3"].number_format = '#,##0;(#,##0);"-"'
+
+m = wb.create_sheet("Model")
+m.append(["USD", "FY25", "FY26", "FY27"])
+m["A2"] = "Revenue"
+m["B2"] = "=Assumptions!$B$3*(1+Assumptions!$B$2)"
+m["B2"].font = Font(color="008000")             # green = link to another sheet
+for col in range(3, 5):
+    L, P = get_column_letter(col), get_column_letter(col - 1)
+    m[f"{L}2"] = f"={P}2*(1+Assumptions!$B$2)"   # black (default) = calculation
+for row in m.iter_rows(min_row=2, min_col=2):
+    for c in row:
+        c.number_format = '#,##0;(#,##0);"-"'
+for ws in (a, m):
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    ws.freeze_panes = "B2"
+    ws.column_dimensions["A"].width = 24
+wb.calculation.fullCalcOnLoad = True           # Excel recalculates everything when the file opens
+wb.save("model.xlsx")
+```
+
+## Financial model conventions (use them unless the workbook already has its own)
+
+- Font colors: **blue** for hardcoded inputs, **black** for formulas, **green** for links to other sheets. Red (`FF0000`) only for links to external files.
+- Keep assumptions on a labeled sheet with units and sources. Put a light yellow fill (`FFFF99`) on key assumptions that the user must review.
+- Show negatives in parentheses with `#,##0;(#,##0);"-"`, percentages as `0.0%`, currency as `$#,##0`, and multiples as `0.0"x"`. Show years as text or with the `0` format so they don't come out as `2,025`.
+- Put units in the headers ("Revenue (USD m)"), not in every cell.
+- Freeze the header rows and label column, set column widths, and keep calculations flowing left to right and top to bottom.
+- Add check rows, for example `=ROUND(Assets-Liabilities-Equity,2)` should be 0, and label them.
+
+## Editing existing workbooks
+
+- Load once for formulas, `wb = load_workbook(p)`, and once for values, `wv = load_workbook(p, data_only=True)`. **Never save the `data_only` workbook.** Saving it replaces every formula with its last cached value, and those values are gone for good.
+- `data_only=True` shows the value from the file's last save in Excel. The value is `None` for a file that was never calculated, and that includes any file openpyxl wrote.
+- Edit in place. Do not rebuild the workbook from pandas. You would lose styles, widths, validation, named ranges, and comments.
+- openpyxl may drop shapes, form controls, slicers, some pivot table and chart features, and external link caches. Inspect first (unzip -l shows `xl/drawings`, `xl/pivotTables`, `xl/slicers`). If any are present, tell the user and save to a new file name.
+- When you insert rows or columns, openpyxl does **not** update the formulas that point at them. Append instead, or rewrite the affected formulas and then check them.
+- Copy the style of an existing cell with `from copy import copy; new.font = copy(old.font)` (and the same for `fill`, `border`, `number_format`, `alignment`).
+- Merged cells: only the top-left cell holds the value. Writing to any other cell in the range raises an error.
+
+## pandas for analysis
+
+```python
+import pandas as pd
+sheets = pd.read_excel("in.xlsx", sheet_name=None, dtype={"Zip": str, "ID": str})  # keep leading zeros
+df = pd.read_csv("in.csv", sep=None, engine="python", encoding="utf-8-sig")         # sniff the delimiter; strip the BOM
+# If decoding fails, retry with encoding="latin-1". If the header is not on row 1, use header=N.
+df.columns = df.columns.str.strip()
+summary = df.pivot_table(index="Region", columns="Quarter", values="Sales", aggfunc="sum", margins=True)
+```
+
+Look at the dtypes before trusting any math. Numbers stored as text (`"1,200"`, `"$5"`, `"(300)"`) need cleaning. Dates can come in as serial numbers or as strings. If you write pandas results into a formatted workbook, write the values with openpyxl and add formula totals so the totals stay live.
+
+## Charts
+
+```python
+from openpyxl.chart import BarChart, LineChart, Reference
+ch = BarChart(); ch.title = "Revenue by year"; ch.y_axis.title = "USD"
+data = Reference(m, min_col=2, max_col=4, min_row=1, max_row=2)   # the header row supplies the series names
+ch.add_data(data, titles_from_data=True, from_rows=True)
+ch.set_categories(Reference(m, min_col=2, max_col=4, min_row=1, max_row=1))
+ch.width, ch.height = 18, 9
+m.add_chart(ch, "B6")
+```
+
+Point charts at cell ranges so they update with the data. Label the axes, use one chart per question, and don't use 3D.
+
+## Common pitfalls
+
+- Typing computed values instead of formulas, which leaves a dead model.
+- Formulas that point at a sheet you renamed, or at a row you deleted, give `#REF!`.
+- Text that looks like a number breaks `SUM`, which then silently returns 0.
+- Percentages stored as `8` instead of `0.08`.
+- An off-by-one range (`SUM(B2:B9)` when the data runs to B10). Check the ends of every range.
+- Dynamic-array functions or `_xlfn` functions show `#NAME?` in older Excel and LibreOffice.
+- Circular references. Avoid them unless the user explicitly wants iterative calculation.
+- Overwriting the user's original file. Save as `name_updated.xlsx` unless they asked for an in-place edit.
+
+## VERIFY (mandatory before you say you're done)
+
+### 1. Recalculate and scan for errors
+
+openpyxl saves formulas without cached values, so opening the file in LibreOffice computes every formula. Save this as `.work/recalc_check.py`, then run `python3 .work/recalc_check.py model.xlsx`.
+
+```python
+import sys, os, json, shutil, subprocess, tempfile, re
+import openpyxl
+src = os.path.abspath(sys.argv[1])
+ERRORS = {"#REF!", "#DIV/0!", "#VALUE!", "#NAME?", "#N/A", "#NUM!", "#NULL!", "#SPILL!", "#CALC!"}
+soffice = shutil.which("soffice") or shutil.which("libreoffice")
+mac = "/Applications/LibreOffice.app/Contents/MacOS/soffice"
+if not soffice and os.path.exists(mac):
+    soffice = mac
+report = {"status": "ok", "recalculated": False, "errors": [], "uncalculated": 0, "warnings": []}
+formulas = openpyxl.load_workbook(src)
+if soffice:
+    out = tempfile.mkdtemp()
+    profile = tempfile.mkdtemp()   # a separate profile avoids clashing with a LibreOffice window the user has open
+    subprocess.run([soffice, f"-env:UserInstallation=file://{profile}", "--headless", "--calc",
+                    "--convert-to", "xlsx", "--outdir", out, src],
+                   check=True, capture_output=True, timeout=180)
+    copy = os.path.join(out, os.path.basename(src).rsplit(".", 1)[0] + ".xlsx")
+    values = openpyxl.load_workbook(copy, data_only=True)
+    report["recalculated"] = True
+    report["recalculated_copy"] = copy
+    for ws in formulas.worksheets:
+        vs = values[ws.title]
+        for row in ws.iter_rows():
+            for c in row:
+                v = vs[c.coordinate].value
+                if isinstance(v, str) and v.strip() in ERRORS:
+                    report["errors"].append({"sheet": ws.title, "cell": c.coordinate, "value": v, "formula": c.value})
+                elif isinstance(c.value, str) and c.value.startswith("=") and v is None:
+                    report["uncalculated"] += 1
+else:
+    report["warnings"].append("LibreOffice not found: formulas were NOT recalculated; static checks only")
+# Static checks that run everywhere: referenced sheets and defined names exist
+names = {ws.title for ws in formulas.worksheets}
+defined = set(formulas.defined_names.keys()) if hasattr(formulas.defined_names, "keys") else set()
+for ws in formulas.worksheets:
+    for row in ws.iter_rows():
+        for c in row:
+            f = c.value
+            if not (isinstance(f, str) and f.startswith("=")):
+                continue
+            if "#REF!" in f:
+                report["errors"].append({"sheet": ws.title, "cell": c.coordinate, "value": "#REF! in formula", "formula": f})
+                continue
+            if "[" in f:   # external workbook or table references: skip the sheet check
+                continue
+            for quoted, bare in re.findall(r"(?:'((?:[^']|'')+)'|([A-Za-z_][\w\.]*))!", f):
+                ref = (quoted or bare).replace("''", "'")
+                if ref not in names and not ref.startswith("["):
+                    report["errors"].append({"sheet": ws.title, "cell": c.coordinate, "value": f"missing sheet '{ref}'", "formula": f})
+if report["errors"]:
+    report["status"] = "errors"
+elif not report["recalculated"] or report["uncalculated"]:
+    report["status"] = "unverified"
+print(json.dumps(report, indent=2, default=str))
+```
+
+`status` must be `ok`. `unverified` means LibreOffice was missing or some formulas did not calculate, and you must say so to the user. Fix every entry in `errors` and run the check again. If `uncalculated` is greater than 0 after a recalculation, LibreOffice did not compute those cells (often because of an unsupported function), so look at them. The recalculated copy in the temp dir is only for checking. Deliver your openpyxl file (with `fullCalcOnLoad = True`) unless the user needs cached values for a viewer that does not calculate, such as a previewer or pandas. In that case deliver the recalculated copy, after you confirm it kept charts and formatting.
+
+### 2. Spot-check by hand
+
+Pick 2 or 3 important outputs (a total, a growth figure, a final metric). Recompute them independently in pandas or by hand from the inputs, and compare them with the recalculated values. Say which cells you checked.
+
+### 3. Structure check
+
+- Every derived cell is a formula. Search the output for numbers in calculation areas that should be formulas.
+- Input cells are blue, formulas are black, and links to other sheets are green (or the workbook's own convention is followed).
+- Headers carry units, number formats are applied, panes are frozen, column widths are set, and there are no `######` columns (widen them).
+- The original file is untouched unless the user asked for an in-place edit.
+
+### 4. Report to the user
+
+Tell the user where the file is, what it contains, the result of the recalculation check (or that LibreOffice was not available, so the formulas were not recalculated and only the static checks ran), which values you spot-checked, and any assumptions they need to review.

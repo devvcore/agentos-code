@@ -1,6 +1,7 @@
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { Tooltip } from "@opencode-ai/ui/tooltip"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
+import { SegmentedControlItemV2, SegmentedControlV2 } from "@opencode-ai/ui/v2/segmented-control-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { WordmarkV2 } from "@opencode-ai/ui/v2/wordmark-v2"
 import { Show, createMemo, createSignal, type Accessor } from "solid-js"
@@ -16,6 +17,7 @@ import {
 } from "@/components/prompt-project-selector"
 import { StatusPopoverV2 } from "@/components/status-popover"
 import { useLanguage } from "@/context/language"
+import { useLocal } from "@/context/local"
 import { useSDK } from "@/context/sdk"
 import { useServerSync } from "@/context/server-sync"
 import { useProviders } from "@/hooks/use-providers"
@@ -31,6 +33,9 @@ export function NewSessionView(props: {
   project: PromptProjectController
   workspace: NewSessionWorkspaceController
 }) {
+  const language = useLanguage()
+  const local = useLocal()
+
   return (
     <div class="@container relative flex flex-col min-h-0 h-full flex-1">
       <div
@@ -39,7 +44,23 @@ export function NewSessionView(props: {
       >
         <div class="absolute inset-x-0 top-[25.375%] flex justify-center px-6">
           <div class={NEW_SESSION_CONTENT_WIDTH}>
-            <WordmarkV2 class="h-auto w-full text-v2-background-bg-inverse" />
+            <div class="relative">
+              <Show when={local.agent.workAvailable()}>
+                <div class="absolute inset-x-0 bottom-full mb-6 flex justify-center">
+                  <SegmentedControlV2
+                    value={local.agent.mode()}
+                    onChange={(value) => {
+                      if (value === "code" || value === "work") local.agent.setMode(value)
+                    }}
+                    aria-label={language.t("omni.mode.label")}
+                  >
+                    <SegmentedControlItemV2 value="code">{language.t("omni.mode.code")}</SegmentedControlItemV2>
+                    <SegmentedControlItemV2 value="work">{language.t("omni.mode.work")}</SegmentedControlItemV2>
+                  </SegmentedControlV2>
+                </div>
+              </Show>
+              <WordmarkV2 class="h-auto w-full text-v2-background-bg-inverse" variant={local.agent.mode()} />
+            </div>
             <div class="mt-8 flex flex-col gap-8">
               <PromptInputV2Composer controller={props.input} />
               <Show when={props.project.empty()}>

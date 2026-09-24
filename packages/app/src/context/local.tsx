@@ -8,7 +8,7 @@ import { useSettings } from "@/context/settings"
 import { useProviders } from "@/hooks/use-providers"
 import { resolveDefaultModel } from "@/hooks/provider-catalog"
 import { Persist, persisted } from "@/utils/persist"
-import { hasCustomAgent, resolveAgent } from "./local-agent"
+import { hasCustomAgent, hasWorkAgent, resolveAgent, selectAgent } from "./local-agent"
 import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./model-variant"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
@@ -111,10 +111,6 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       }
     }
 
-    const pickAgent = (name: string | undefined) => {
-      return resolveAgent(list(), name)
-    }
-
     createEffect(() => {
       const items = list()
       if (items.length === 0) {
@@ -183,10 +179,17 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       list,
       visible: agentsVisible,
       current() {
-        return pickAgent(agentsVisible() ? (scope()?.agent ?? store.current) : "build")
+        return selectAgent(list(), scope()?.agent ?? store.current, agentsVisible())
+      },
+      workAvailable: createMemo(() => hasWorkAgent(list())),
+      mode() {
+        return agent.current()?.name === "work" ? "work" : "code"
+      },
+      setMode(mode: "code" | "work") {
+        agent.set(mode === "work" ? "work" : "build")
       },
       set(name: string | undefined) {
-        const item = pickAgent(name)
+        const item = resolveAgent(list(), name)
         if (!item) {
           setStore("current", undefined)
           return
