@@ -4,16 +4,28 @@ import { getFilename } from "@opencode-ai/core/util/path"
 export type WorkFileChange = {
   file: string
   path: string
-  kind: "create" | "update" | "delete" | "write"
+  kind: "create" | "update" | "delete" | "write" | "share"
 }
 
 export const WORK_FILE_TOOLS = new Set(["edit", "write", "patch", "apply_patch"])
+
+// present_files shows existing files in the app viewer; its parts render as the same file cards.
+export const WORK_PRESENT_TOOL = "present_files"
 
 export function workFileChanges(
   tool: string,
   input: Record<string, unknown>,
   metadata: Record<string, unknown>,
 ): WorkFileChange[] {
+  if (tool === WORK_PRESENT_TOOL) {
+    return Array.isArray(metadata.files)
+      ? metadata.files.flatMap((item): WorkFileChange[] => {
+          if (!item || typeof item !== "object" || !("path" in item) || typeof item.path !== "string") return []
+          const name = "name" in item && typeof item.name === "string" ? item.name : getFilename(item.path)
+          return name ? [{ file: name, path: item.path, kind: "share" }] : []
+        })
+      : []
+  }
   if (tool === "edit") {
     const filediff = metadata.filediff
     const diffFile =
@@ -59,5 +71,6 @@ export function workFileLabelKey(kind: WorkFileChange["kind"] | undefined, pendi
   if (kind === "create") return pending ? "ui.tool.work.creating" : "ui.tool.work.created"
   if (kind === "delete") return pending ? "ui.tool.work.deleting" : "ui.tool.work.deleted"
   if (kind === "write") return pending ? "ui.tool.work.saving" : "ui.tool.work.saved"
+  if (kind === "share") return "ui.tool.work.shared"
   return pending ? "ui.tool.work.updating" : "ui.tool.work.updated"
 }

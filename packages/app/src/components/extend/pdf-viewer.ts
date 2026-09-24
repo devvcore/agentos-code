@@ -113,7 +113,7 @@ function PdfPages(props: { id: string; labels: PdfViewerProps["labels"] }) {
           "div",
           {
             className:
-              "pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-v2-background-bg-contrast px-2.5 py-1 text-11-regular text-v2-text-text-inverse tabular-nums opacity-80",
+              "pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full bg-v2-background-bg-contrast px-2.5 py-1 text-12-regular text-v2-text-text-inverse tabular-nums opacity-80",
           },
           props.labels.page(scroll.state.currentPage, scroll.state.totalPages),
         )

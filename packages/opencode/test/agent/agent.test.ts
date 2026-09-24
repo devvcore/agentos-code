@@ -81,8 +81,25 @@ it.instance("work agent is a visible native primary agent and build stays defaul
     expect(evalPerm(work, "question")).toBe("allow")
     expect(evalPerm(work, "plan_enter")).toBe("deny")
     expect(evalPerm(work, "edit")).toBe("allow")
+    expect(evalPerm(work, "present_files")).toBe("allow")
     expect(yield* load((svc) => svc.defaultAgent())).toBe("build")
     expect((yield* load((svc) => svc.list()))[0].name).toBe("build")
+  }),
+)
+
+it.instance("work agent asks before shell commands that launch desktop apps", () =>
+  Effect.gen(function* () {
+    const work = yield* load((svc) => svc.get("work"))
+    const bash = (command: string) => Permission.evaluate("bash", command, work.permission).action
+    expect(bash('open "Site Report.xlsx"')).toBe("ask")
+    expect(bash("open")).toBe("ask")
+    expect(bash("open -a Numbers outputs/report.xlsx")).toBe("ask")
+    expect(bash("xdg-open report.pdf")).toBe("ask")
+    expect(bash("start report.docx")).toBe("ask")
+    expect(bash("python3 x.py")).toBe("allow")
+    expect(bash("openssl rand -hex 8")).toBe("allow")
+    const build = yield* load((svc) => svc.get("build"))
+    expect(Permission.evaluate("bash", 'open "Site Report.xlsx"', build.permission).action).toBe("allow")
   }),
 )
 

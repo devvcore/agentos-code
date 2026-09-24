@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Message, Part, ToolPart } from "@opencode-ai/sdk/v2"
-import { workOutputs } from "./work-panel-data"
+import { workOutputs, workPresents } from "./work-panel-data"
 
 const dir = "/work/project"
 
@@ -117,5 +117,55 @@ describe("workOutputs", () => {
 
   test("handles sessions without messages", () => {
     expect(workOutputs({ directory: dir, messages: undefined, parts: {} })).toEqual([])
+  })
+})
+
+describe("present_files", () => {
+  const present = (id: string, time: number, paths: string[]) =>
+    tool(id, "present_files", time, { paths }, { files: paths.map((path) => ({ path, name: path.split("/").pop() })) })
+
+  test("lists presented files wherever they live in the project", () => {
+    expect(run([present("a", 1, [`${dir}/sales.xlsx`, `${dir}/data/raw/q3.csv`])])).toEqual([
+      { path: `${dir}/sales.xlsx`, name: "sales.xlsx", folder: "", time: 1 },
+      { path: `${dir}/data/raw/q3.csv`, name: "q3.csv", folder: "data/raw", time: 1 },
+    ])
+  })
+
+  test("dedupes presented files with outputs writes, newest first", () => {
+    const result = run([
+      tool("a", "write", 1, { filePath: `${dir}/outputs/report.pdf` }),
+      tool("b", "write", 2, { filePath: `${dir}/outputs/chart.png` }),
+      present("c", 3, [`${dir}/outputs/report.pdf`]),
+    ])
+    expect(result.map((item) => [item.name, item.time])).toEqual([
+      ["report.pdf", 3],
+      ["chart.png", 2],
+    ])
+  })
+
+  test("ignores malformed metadata", () => {
+    expect(run([tool("a", "present_files", 1, {}, { files: [{ name: "x" }, "nope", null] })])).toEqual([])
+    expect(run([tool("a", "present_files", 1, {}, {})])).toEqual([])
+  })
+
+  test("workPresents lists completed parts in order with their paths", () => {
+    const running = { ...present("r", 3, []), state: { status: "running", input: {}, time: { start: 1 } } } as ToolPart
+    expect(
+      workPresents({
+        messages: [message("msg")],
+        parts: {
+          msg: [
+            present("a", 1, [`${dir}/a.xlsx`]),
+            tool("w", "write", 2, { filePath: `${dir}/outputs/b.pdf` }),
+            running,
+            present("c", 4, [`${dir}/c.docx`, `${dir}/d.pptx`]),
+          ],
+        },
+      }),
+    ).toEqual([
+      { id: "a", paths: [`${dir}/a.xlsx`] },
+      { id: "c", paths: [`${dir}/c.docx`, `${dir}/d.pptx`] },
+    ])
+    expect(workPresents({ messages: undefined, parts: {} })).toEqual([])
   })
 })

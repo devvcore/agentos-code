@@ -1,23 +1,62 @@
-import { createStore } from "solid-js/store"
+import { createRoot } from "solid-js"
+import { createStore, reconcile } from "solid-js/store"
+import { usePlatform, type Platform } from "@/context/platform"
+import { Persist, persisted } from "@/utils/persist"
+import {
+  WORK_PANEL_CLOSED,
+  workPanelReduce,
+  type WorkPanelAction,
+  type WorkPanelState,
+} from "@/pages/session/work-panel-state"
 
-// Which deliverable the Omniwork side panel is previewing, per session. Chat file cards and the
-// WorkPanel outputs list open files here; the WorkPanel renders the preview and widens itself.
-const [state, setState] = createStore<Record<string, string | undefined>>({})
+// Sessions whose panel state is kept; the least recently touched ones are dropped beyond this.
+const WORK_PANEL_SESSIONS = 100
 
-export const workPreview = {
-  path: (sessionID: string) => state[sessionID],
-  open: (sessionID: string, path: string) => setState(sessionID, path),
-  close: (sessionID: string) => setState(sessionID, undefined),
+type Entry = WorkPanelState & { at: number }
+
+const root: { store?: ReturnType<typeof createWorkPanelStore> } = {}
+
+/**
+ * The Omniwork side panel state for every session, persisted across reloads. Chat file cards,
+ * the header Files button, keybinds, and auto-open all drive it; the WorkPanel renders it.
+ */
+export function useWorkPanel() {
+  const platform = usePlatform()
+  root.store ??= createRoot(() => createWorkPanelStore(platform))
+  return root.store
 }
 
-/** CSS width of the WorkPanel: compact for progress/outputs, wide while previewing a file. */
-export function workPanelWidth(previewing: boolean) {
-  return previewing ? "clamp(480px, 50%, 900px)" : "340px"
-}
-
-/** CSS width of the session column beside the WorkPanel (8px row gap), so both fill the row. */
-export function workSessionWidth(previewing: boolean) {
-  return `calc(100% - ${workPanelWidth(previewing)} - 8px)`
+function createWorkPanelStore(platform: Platform) {
+  const [state, setState, , ready] = persisted(
+    Persist.global("omni.work.panel"),
+    createStore<Record<string, Entry | undefined>>({}),
+    platform,
+  )
+  const get = (sessionID: string): WorkPanelState => state[sessionID] ?? WORK_PANEL_CLOSED
+  const dispatch = (sessionID: string, action: WorkPanelAction) => {
+    const current = get(sessionID)
+    const next = workPanelReduce(current, action)
+    if (next === current) return
+    setState(sessionID, reconcile({ ...next, at: Date.now() }))
+    const stale = Object.entries(state)
+      .flatMap(([id, entry]) => (entry ? [{ id, at: entry.at }] : []))
+      .sort((a, b) => b.at - a.at)
+      .slice(WORK_PANEL_SESSIONS)
+    stale.forEach((item) => setState(item.id, undefined))
+  }
+  return {
+    /** False until persisted state has loaded; auto-open waits for it. */
+    ready,
+    state: get,
+    view: (sessionID: string) => get(sessionID).view,
+    path: (sessionID: string) => (get(sessionID).view === "preview" ? get(sessionID).path : undefined),
+    dispatch,
+    openFiles: (sessionID: string) => dispatch(sessionID, { type: "files" }),
+    open: (sessionID: string, path: string) => dispatch(sessionID, { type: "open", path }),
+    close: (sessionID: string) => dispatch(sessionID, { type: "close" }),
+    toggleFiles: (sessionID: string) => dispatch(sessionID, { type: "toggle" }),
+    back: (sessionID: string) => dispatch(sessionID, { type: "back" }),
+  }
 }
 
 /** Largest file the preview will download and render. */

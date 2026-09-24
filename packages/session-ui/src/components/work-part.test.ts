@@ -45,6 +45,29 @@ describe("workPartVisible", () => {
   })
 })
 
+describe("present_files", () => {
+  const files = [
+    { path: "/Users/me/Site Report.xlsx", name: "Site Report.xlsx" },
+    { path: "/Users/me/outputs/deck.pptx", name: "deck.pptx" },
+  ]
+
+  test("shows completed parts as shared cards wherever the files live", () => {
+    const part = tool("present_files", { paths: ["Site Report.xlsx", "outputs/deck.pptx"] }, "completed", { files })
+    expect(workPartVisible(part)).toBe(true)
+    expect(workOutputChanges(part)).toEqual([
+      { file: "Site Report.xlsx", path: "/Users/me/Site Report.xlsx", kind: "share" },
+      { file: "deck.pptx", path: "/Users/me/outputs/deck.pptx", kind: "share" },
+    ])
+  })
+
+  test("hides pending, running, failed, and empty parts", () => {
+    expect(workPartVisible(tool("present_files", { paths: ["a.pdf"] }, "pending"))).toBe(false)
+    expect(workPartVisible(tool("present_files", { paths: ["a.pdf"] }, "running", { files }))).toBe(false)
+    expect(workPartVisible(tool("present_files", { paths: ["a.pdf"] }, "error", { files }))).toBe(false)
+    expect(workPartVisible(tool("present_files", { paths: ["a.pdf"] }, "completed", {}))).toBe(false)
+  })
+})
+
 describe("workOutputChanges", () => {
   test("drops scratch files from a mixed patch", () => {
     const part = tool("apply_patch", {}, "completed", {
@@ -97,6 +120,14 @@ describe("workActivity", () => {
       target: "report.docx",
     })
     expect(workActivity([tool("write", {}, "pending")])).toEqual({ key: "ui.tool.work.status.writingFiles" })
+    expect(workActivity([tool("present_files", { paths: ["/w/Site Report.xlsx"] }, "running")])).toEqual({
+      key: "ui.tool.work.status.opening",
+      target: "Site Report.xlsx",
+    })
+    expect(workActivity([tool("present_files", { paths: ["a.pdf", "b.csv"] }, "pending")])).toEqual({
+      key: "ui.tool.work.status.openingFiles",
+    })
+    expect(workActivity([tool("present_files", {}, "pending")])).toEqual({ key: "ui.tool.work.status.openingFiles" })
     expect(workActivity([tool("mcp_notion_search", {}, "running")])).toBeUndefined()
   })
 })

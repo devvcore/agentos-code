@@ -21,6 +21,7 @@ import { useSessionLayout } from "@/pages/session/session-layout"
 import { useSessionArchive } from "@/pages/session/session-archive"
 import { createSessionOwnership } from "./session-ownership"
 import { useLocal } from "@/context/local"
+import { useWorkPanel } from "@/pages/session/work-preview"
 
 export type SessionCommandContext = {
   navigateMessageByOffset: (offset: number) => void
@@ -56,6 +57,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
   const { params, sessionKey, tabs, view } = useSessionLayout()
   const sessionOwnership = createSessionOwnership(sessionKey)
   const sessionArchive = useSessionArchive()
+  const workPanel = useWorkPanel()
   const openDialog = async <T,>(load: () => Promise<T>, show: (value: T) => void) => {
     const owner = sessionOwnership.capture()
     const value = await load()
@@ -585,6 +587,17 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
   ]
 
+  // Work mode borrows the review toggle keybind for its files panel.
+  const workCmds = () => [
+    viewCommand({
+      id: "work.files.toggle",
+      title: language.t("omni.work.files.toggle"),
+      keybind: "mod+shift+r",
+      disabled: !params.id,
+      onSelect: () => params.id && workPanel.toggleFiles(params.id),
+    }),
+  ]
+
   const terminalCmds = () => [
     terminalCommand({
       id: "terminal.close",
@@ -653,7 +666,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     ...viewCmds().filter(
       (option) => !actions.work?.() || !["terminal.toggle", "review.toggle", "fileTree.toggle"].includes(option.id),
     ),
-    ...(actions.work?.() ? [] : terminalCmds()),
+    ...(actions.work?.() ? workCmds() : terminalCmds()),
     ...messageCmds(),
     ...mcpCmds(),
     ...permissionsCmds(),

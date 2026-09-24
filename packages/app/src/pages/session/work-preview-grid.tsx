@@ -31,7 +31,7 @@ export function WorkPreviewGrid(props: { text: string; delimiter: string }) {
               <th class="sticky left-0 z-10 border-b border-r border-v2-border-border-muted bg-v2-background-bg-layer-01" />
               <For each={model().widths}>
                 {(_, index) => (
-                  <th class="border-b border-r border-v2-border-border-muted bg-v2-background-bg-layer-01 px-2 py-1 text-11-regular text-v2-text-text-muted">
+                  <th class="border-b border-r border-v2-border-border-muted bg-v2-background-bg-layer-01 px-2 py-1 text-12-regular text-v2-text-text-muted">
                     {columnName(index())}
                   </th>
                 )}
@@ -62,7 +62,7 @@ export function WorkPreviewGrid(props: { text: string; delimiter: string }) {
 function Row(props: { row: string[]; number: number; widths: number[]; numeric?: boolean[]; class?: string }) {
   return (
     <tr>
-      <th class="sticky left-0 border-b border-r border-v2-border-border-muted bg-v2-background-bg-layer-01 px-2 py-1 text-right text-11-regular text-v2-text-text-muted">
+      <th class="sticky left-0 border-b border-r border-v2-border-border-muted bg-v2-background-bg-layer-01 px-2 py-1 text-right text-12-regular text-v2-text-text-muted">
         {props.number}
       </th>
       <For each={props.widths}>

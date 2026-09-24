@@ -1,6 +1,6 @@
 import type { Part, ToolPart } from "@opencode-ai/sdk/v2"
 import { getFilename } from "@opencode-ai/core/util/path"
-import { WORK_FILE_TOOLS, workFileChanges } from "./work-file-change"
+import { WORK_FILE_TOOLS, WORK_PRESENT_TOOL, workFileChanges } from "./work-file-change"
 
 // Omniwork Work mode hides tool activity. People see the conversation, answered questions, and
 // deliverables; pending questions and permission requests render in the composer dock, not as parts.
@@ -9,15 +9,18 @@ export function workPartVisible(part: Part) {
   if (part.type !== "tool") return true
   if (part.tool === "question") return true
   if (part.state.status === "error") return false
+  // While running, the status line says "Opening …"; the cards appear once the files are shown.
+  if (part.tool === WORK_PRESENT_TOOL) return part.state.status === "completed" && workOutputChanges(part).length > 0
   if (WORK_FILE_TOOLS.has(part.tool)) return workOutputChanges(part).length > 0
   return false
 }
 
 // Only deliverables under an outputs/ folder get a file card; scratch files stay hidden.
+// Files the agent explicitly presents are shown wherever they live.
 export function workOutputChanges(part: ToolPart) {
-  return workFileChanges(part.tool, part.state.input ?? {}, toolMetadata(part)).filter((change) =>
-    /(^|[\\/])outputs[\\/]/.test(change.path),
-  )
+  const changes = workFileChanges(part.tool, part.state.input ?? {}, toolMetadata(part))
+  if (part.tool === WORK_PRESENT_TOOL) return changes
+  return changes.filter((change) => /(^|[\\/])outputs[\\/]/.test(change.path))
 }
 
 export function workFilePath(directory: string, path: string) {
@@ -42,6 +45,13 @@ export function workActivity(parts: Part[]) {
   }
   if (part.tool === "glob" || part.tool === "grep" || part.tool === "list")
     return { key: "ui.tool.work.status.readingFiles" as const }
+  if (part.tool === WORK_PRESENT_TOOL) {
+    const paths = Array.isArray(input.paths) ? input.paths.filter((item) => typeof item === "string") : []
+    const file = paths.length === 1 ? getFilename(paths[0]) : ""
+    return file
+      ? { key: "ui.tool.work.status.opening" as const, target: file }
+      : { key: "ui.tool.work.status.openingFiles" as const }
+  }
   if (part.tool === "bash" || part.tool === "shell") return { key: "ui.tool.work.status.running" as const }
   if (part.tool === "webfetch" || part.tool === "websearch") return { key: "ui.tool.work.status.researching" as const }
   if (part.tool === "todowrite" || part.tool === "todoread") return { key: "ui.tool.work.status.planning" as const }

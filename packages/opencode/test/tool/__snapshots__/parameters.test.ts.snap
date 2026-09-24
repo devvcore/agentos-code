@@ -464,3 +464,24 @@ exports[`tool parameters JSON Schema (wire shape) write 1`] = `
   "type": "object",
 }
 `;
+
+exports[`tool parameters JSON Schema (wire shape) present_files 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "paths": {
+      "description": "Files to show the user, absolute or relative to the project directory (1 to 10 paths)",
+      "items": {
+        "type": "string",
+      },
+      "maxItems": 10,
+      "minItems": 1,
+      "type": "array",
+    },
+  },
+  "required": [
+    "paths",
+  ],
+  "type": "object",
+}
+`;

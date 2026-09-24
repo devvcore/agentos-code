@@ -9,7 +9,7 @@ export type WorkOutput = {
   time: number
 }
 
-type Change = { path: string; removed: boolean; time: number }
+type Change = { path: string; removed: boolean; time: number; presented?: boolean }
 
 function text(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : undefined
@@ -31,6 +31,7 @@ function changes(part: ToolPart): Change[] {
   if (part.state.status !== "completed") return []
   const state = part.state
   const time = state.time.end
+  if (part.tool === "present_files") return presented(part).map((path) => ({ path, removed: false, time, presented: true }))
   if (part.tool === "write") {
     const path = text(state.input.filePath)
     return path ? [{ path, removed: false, time }] : []
@@ -55,9 +56,19 @@ function changes(part: ToolPart): Change[] {
   })
 }
 
+/** Absolute paths a completed `present_files` part showed to the user. */
+function presented(part: ToolPart) {
+  if (part.state.status !== "completed" || !Array.isArray(part.state.metadata.files)) return []
+  return part.state.metadata.files.flatMap((raw) => {
+    const path = text(record(raw)?.path)
+    return path ? [path] : []
+  })
+}
+
 /**
- * Deliverable files an agent wrote under an `outputs/` folder, newest first.
- * Later deletes or moves (apply_patch) drop the earlier entry.
+ * Deliverable files, newest first: files an agent wrote under an `outputs/` folder plus any
+ * file it showed with `present_files`, wherever it lives. Later deletes or moves (apply_patch)
+ * drop the earlier entry.
  */
 export function workOutputs(input: {
   directory: string
@@ -79,7 +90,7 @@ export function workOutputs(input: {
       }
       const inside = path.startsWith(`${root}/`) || path.startsWith(`${root}\\`)
       const segments = (inside ? path.slice(root.length + 1) : path).split(/[\\/]/)
-      if (!segments.slice(0, -1).includes("outputs")) return
+      if (!change.presented && !segments.slice(0, -1).includes("outputs")) return
       latest.set(path, {
         path,
         name: segments[segments.length - 1],
@@ -88,4 +99,16 @@ export function workOutputs(input: {
       })
     })
   return [...latest.values()].sort((a, b) => b.time - a.time)
+}
+
+/** Completed `present_files` parts in the order they ran, with the absolute paths they showed. */
+export function workPresents(input: {
+  messages: Message[] | undefined
+  parts: Record<string, Part[] | undefined>
+}) {
+  return (input.messages ?? [])
+    .flatMap((message) => input.parts[message.id] ?? [])
+    .filter((part): part is ToolPart => part.type === "tool" && part.tool === "present_files")
+    .filter((part) => part.state.status === "completed")
+    .map((part) => ({ id: part.id, paths: presented(part) }))
 }

@@ -16,6 +16,7 @@ import { Parameters as Grep } from "../../src/tool/grep"
 import { Parameters as Invalid } from "../../src/tool/invalid"
 import { Parameters as Lsp } from "../../src/tool/lsp"
 import { Parameters as Plan } from "../../src/tool/plan"
+import { Parameters as PresentFiles } from "../../src/tool/present_files"
 import { Parameters as Question } from "../../src/tool/question"
 import { Parameters as Read } from "../../src/tool/read"
 import { Parameters as Shell } from "../../src/tool/shell"
@@ -44,6 +45,7 @@ describe("tool parameters", () => {
     test("invalid", () => expect(toJsonSchema(Invalid)).toMatchSnapshot())
     test("lsp", () => expect(toJsonSchema(Lsp)).toMatchSnapshot())
     test("plan", () => expect(toJsonSchema(Plan)).toMatchSnapshot())
+    test("present_files", () => expect(toJsonSchema(PresentFiles)).toMatchSnapshot())
     test("question", () => expect(toJsonSchema(Question)).toMatchSnapshot())
     test("read", () => expect(toJsonSchema(Read)).toMatchSnapshot())
     test("skill", () => expect(toJsonSchema(Skill)).toMatchSnapshot())
@@ -211,6 +213,18 @@ describe("tool parameters", () => {
     })
     test("rejects missing questions", () => {
       expect(accepts(Question, {})).toBe(false)
+    })
+  })
+
+  describe("present_files", () => {
+    test("accepts 1 to 10 paths", () => {
+      expect(parse(PresentFiles, { paths: ["outputs/Site Report.xlsx"] }).paths).toEqual(["outputs/Site Report.xlsx"])
+      expect(accepts(PresentFiles, { paths: Array.from({ length: 10 }, (_, i) => `f${i}.csv`) })).toBe(true)
+    })
+    test("rejects empty and oversized lists", () => {
+      expect(accepts(PresentFiles, { paths: [] })).toBe(false)
+      expect(accepts(PresentFiles, { paths: Array.from({ length: 11 }, (_, i) => `f${i}.csv`) })).toBe(false)
+      expect(accepts(PresentFiles, {})).toBe(false)
     })
   })
 

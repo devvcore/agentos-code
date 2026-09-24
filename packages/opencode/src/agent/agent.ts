@@ -186,7 +186,20 @@ const layer = Layer.effect(
               "Omniwork. Knowledge work on your files: spreadsheets, documents, slide decks, PDFs, data analysis, and research.",
             prompt: PROMPT_WORK,
             options: {},
-            permission: Permission.merge(defaults, Permission.fromConfig({ question: "allow" }), user),
+            permission: Permission.merge(
+              defaults,
+              Permission.fromConfig({
+                question: "allow",
+                // Files open in the in-app viewer via present_files; launching desktop apps needs approval.
+                bash: {
+                  open: "ask",
+                  "open *": "ask",
+                  "xdg-open *": "ask",
+                  "start *": "ask",
+                },
+              }),
+              user,
+            ),
             mode: "primary",
             native: true,
           },

@@ -50,10 +50,33 @@ describe("workFileChanges", () => {
   })
 })
 
+describe("present_files", () => {
+  test("derives one shared card per presented file", () => {
+    expect(
+      workFileChanges(
+        "present_files",
+        { paths: ["Site Report.xlsx"] },
+        {
+          files: [
+            { path: "/Users/me/Site Report.xlsx", name: "Site Report.xlsx" },
+            { path: "/Users/me/notes.csv" },
+            { name: "no-path.pdf" },
+          ],
+        },
+      ),
+    ).toEqual([
+      { file: "Site Report.xlsx", path: "/Users/me/Site Report.xlsx", kind: "share" },
+      { file: "notes.csv", path: "/Users/me/notes.csv", kind: "share" },
+    ])
+    expect(workFileChanges("present_files", { paths: ["a.pdf"] }, {})).toEqual([])
+  })
+})
+
 describe("workFileLabelKey", () => {
   test("maps kinds to completed and pending labels", () => {
     expect(workFileLabelKey("update", false)).toBe("ui.tool.work.updated")
     expect(workFileLabelKey("create", true)).toBe("ui.tool.work.creating")
     expect(workFileLabelKey(undefined, true)).toBe("ui.tool.work.updatingFiles")
+    expect(workFileLabelKey("share", false)).toBe("ui.tool.work.shared")
   })
 })

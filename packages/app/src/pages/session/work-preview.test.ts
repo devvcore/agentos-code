@@ -7,33 +7,7 @@ import {
   previewKind,
   previewMime,
   previewRelative,
-  workPanelWidth,
-  workPreview,
-  workSessionWidth,
 } from "./work-preview"
-
-describe("work preview width", () => {
-  test("panel is compact until a file is previewed", () => {
-    expect(workPanelWidth(false)).toBe("340px")
-    expect(workPanelWidth(true)).toBe("clamp(480px, 50%, 900px)")
-  })
-
-  test("session column leaves exactly the panel width plus the row gap", () => {
-    expect(workSessionWidth(false)).toBe("calc(100% - 340px - 8px)")
-    expect(workSessionWidth(true)).toBe("calc(100% - clamp(480px, 50%, 900px) - 8px)")
-  })
-})
-
-describe("work preview store", () => {
-  test("tracks the previewed file per session", () => {
-    workPreview.open("ses_a", "/work/outputs/a.pdf")
-    workPreview.open("ses_b", "/work/outputs/b.xlsx")
-    expect(workPreview.path("ses_a")).toBe("/work/outputs/a.pdf")
-    workPreview.close("ses_a")
-    expect(workPreview.path("ses_a")).toBeUndefined()
-    expect(workPreview.path("ses_b")).toBe("/work/outputs/b.xlsx")
-  })
-})
 
 describe("previewKind", () => {
   test("maps extensions to renderers", () => {

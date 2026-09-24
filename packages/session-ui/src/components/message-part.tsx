@@ -42,7 +42,7 @@ import { Collapsible } from "@opencode-ai/ui/collapsible"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { ToolErrorCard } from "./tool-error-card"
-import { WORK_FILE_TOOLS, workFileLabelKey } from "./work-file-change"
+import { WORK_FILE_TOOLS, WORK_PRESENT_TOOL, workFileLabelKey } from "./work-file-change"
 import { workFilePath, workOutputChanges } from "./work-part"
 import { Checkbox } from "@opencode-ai/ui/checkbox"
 import { DiffChanges } from "@opencode-ai/ui/diff-changes"
@@ -1609,7 +1609,7 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
               )
             }}
           </Match>
-          <Match when={data.workMode && WORK_FILE_TOOLS.has(part().tool)}>
+          <Match when={data.workMode && (WORK_FILE_TOOLS.has(part().tool) || part().tool === WORK_PRESENT_TOOL)}>
             <WorkFileTool part={part()} />
           </Match>
           <Match when={true}>
@@ -1637,7 +1637,8 @@ PART_MAPPING["tool"] = function ToolPartDisplay(props) {
   )
 }
 
-// Omniwork Work mode: a deliverable under outputs/ renders as a compact file card that opens the preview.
+// Omniwork Work mode: a deliverable under outputs/, or a file the agent presents, renders as a compact file card
+// that opens the preview.
 function WorkFileTool(props: { part: ToolPart }) {
   const data = useData()
   const i18n = useI18n()

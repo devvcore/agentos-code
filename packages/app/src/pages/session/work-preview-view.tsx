@@ -1,5 +1,4 @@
 import { type JSX, Match, Show, Switch, createMemo, createResource, onCleanup } from "solid-js"
-import { makeEventListener } from "@solid-primitives/event-listener"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { useTheme } from "@opencode-ai/ui/theme/context"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
@@ -37,6 +36,9 @@ export function WorkPreview(props: {
   version?: number
   /** Desktop-only "open in default app"; omitted where it can't work. */
   onOpen?: () => void
+  /** Back to the files list; omitted where there is no list (phones). */
+  onBack?: () => void
+  /** Closes the whole panel. */
   onClose: () => void
 }) {
   const sdk = useSDK()
@@ -82,17 +84,8 @@ export function WorkPreview(props: {
     error: language.t("omni.work.preview.renderFailed"),
   }))
 
-  // Esc closes the preview unless focus is in a field or a dialog handles it first.
-  makeEventListener(window, "keydown", (event) => {
-    if (event.key !== "Escape" || event.defaultPrevented) return
-    const target = event.target
-    if (target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea, select, [role=dialog]")))
-      return
-    props.onClose()
-  })
-
   const loading = () => (
-    <div class="flex h-full items-center justify-center gap-2 text-13-regular text-v2-text-text-muted" role="status">
+    <div class="flex h-full items-center justify-center gap-2 text-14-regular text-v2-text-text-muted" role="status">
       <LoaderV2 />
       {language.t("omni.work.preview.loading")}
     </div>
@@ -105,7 +98,23 @@ export function WorkPreview(props: {
 
   return (
     <section class="flex h-full min-h-0 flex-col" aria-label={language.t("omni.work.preview.label")}>
-      <header class="flex shrink-0 items-center gap-2 border-b border-v2-border-border-muted py-2 pl-4 pr-2">
+      <header
+        class="flex shrink-0 items-center gap-2 border-b border-v2-border-border-muted py-2 pr-2"
+        classList={{ "pl-4": !props.onBack, "pl-2": !!props.onBack }}
+      >
+        <Show when={props.onBack}>
+          {(back) => (
+            <TooltipV2 value={language.t("omni.work.preview.back")} placement="bottom">
+              <IconButtonV2
+                size="small"
+                variant="ghost"
+                icon={<Icon name="chevron-down" size="small" class="rotate-90" />}
+                aria-label={language.t("omni.work.preview.back")}
+                onClick={() => back()()}
+              />
+            </TooltipV2>
+          )}
+        </Show>
         <FileIcon node={{ path: props.path, type: "file" }} class="size-5 shrink-0" />
         <h2 class="min-w-0 flex-1 truncate text-14-medium text-v2-text-text-base" title={props.path}>
           {name()}
@@ -123,12 +132,12 @@ export function WorkPreview(props: {
             </TooltipV2>
           )}
         </Show>
-        <TooltipV2 value={language.t("omni.work.preview.close")} placement="bottom">
+        <TooltipV2 value={language.t("omni.work.panel.close")} placement="bottom">
           <IconButtonV2
             size="small"
             variant="ghost"
             icon={<Icon name="close" size="small" />}
-            aria-label={language.t("omni.work.preview.close")}
+            aria-label={language.t("omni.work.panel.close")}
             onClick={() => props.onClose()}
           />
         </TooltipV2>
@@ -271,7 +280,7 @@ function Notice(props: {
         <div class="flex flex-col gap-1">
           <p class="text-14-medium text-v2-text-text-base">{props.title}</p>
           <Show when={props.description}>
-            <p class="text-13-regular text-v2-text-text-muted">{props.description}</p>
+            <p class="text-14-regular text-v2-text-text-muted">{props.description}</p>
           </Show>
         </div>
         {props.children}

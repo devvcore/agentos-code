@@ -13,7 +13,7 @@ import { Schema } from "effect"
 import type { ServerConnection } from "@/context/server"
 import { sessionHref } from "@/utils/session-route"
 import { useServerSync } from "@/context/server-sync"
-import { workPreview } from "@/pages/session/work-preview"
+import { useWorkPanel } from "@/pages/session/work-preview"
 
 export function DirectoryDataProvider(
   props: ParentProps<{
@@ -89,6 +89,7 @@ function LocalDataProvider(
   const sync = useSync()
   const local = useLocal()
   const sdk = useSDK()
+  const workPanel = useWorkPanel()
   // Local images in assistant markdown (e.g. matplotlib charts under outputs/) load through the file API.
   const resolveImage = createMarkdownImageResolver({
     directory: () => sdk().directory,
@@ -106,7 +107,7 @@ function LocalDataProvider(
       onSessionHref={props.onSessionHref}
       workMode={local.agent.mode() === "work"}
       resolveImage={resolveImage}
-      onOpenFile={props.sessionID ? (path) => props.sessionID && workPreview.open(props.sessionID, path) : undefined}
+      onOpenFile={props.sessionID ? (path) => props.sessionID && workPanel.open(props.sessionID, path) : undefined}
     >
       {props.children}
     </DataProvider>
