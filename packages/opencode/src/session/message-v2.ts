@@ -32,6 +32,8 @@ import { ProviderError } from "@/provider/error"
 import { iife } from "@/util/iife"
 import { errorMessage } from "@/util/error"
 import { isMedia } from "@/util/media"
+import { SessionAttachment } from "./attachment"
+import path from "path"
 import type { SystemError } from "bun"
 import type { Provider } from "@/provider/provider"
 import { Effect, Schema } from "effect"
@@ -215,6 +217,15 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
               type: "text",
               text: `[Attached ${part.mime}: ${part.filename ?? "file"}]`,
             })
+          } else if (part.mime === "application/pdf" && !model.capabilities.input.pdf) {
+            userMessage.parts.push({
+              type: "text",
+              text: yield* SessionAttachment.pdfText({
+                url: part.url,
+                filename: part.filename,
+                path: SessionAttachment.local(part),
+              }),
+            })
           } else {
             userMessage.parts.push({
               type: "file",
@@ -290,10 +301,21 @@ export const toModelMessagesEffect = Effect.fnUntraced(function* (
         if (part.type === "tool") {
           toolNames.add(part.tool)
           if (part.state.status === "completed") {
+            const stored = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+            // PDFs the model cannot take as documents travel as extracted text in the tool output.
+            const pdfs = stored.filter((a) => a.mime === "application/pdf" && !model.capabilities.input.pdf)
+            const toolPath = part.state.input.filePath
+            const documents = yield* Effect.forEach(pdfs, (a) =>
+              SessionAttachment.pdfText({
+                url: a.url,
+                filename: a.filename,
+                path: typeof toolPath === "string" && path.isAbsolute(toolPath) ? toolPath : undefined,
+              }),
+            )
+            const attachments = stored.filter((a) => !pdfs.includes(a))
             const outputText = part.state.time.compacted
               ? "[Old tool result content cleared]"
-              : truncateToolOutput(part.state.output, options?.toolOutputMaxChars)
-            const attachments = part.state.time.compacted || options?.stripMedia ? [] : (part.state.attachments ?? [])
+              : [truncateToolOutput(part.state.output, options?.toolOutputMaxChars), ...documents].join("\n\n")
 
             // For providers that don't support media in tool results, extract media files
             // (images, PDFs) to be sent as a separate user message

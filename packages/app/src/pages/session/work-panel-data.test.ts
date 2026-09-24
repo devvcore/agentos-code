@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Message, Part, ToolPart } from "@opencode-ai/sdk/v2"
-import { workOutputs, workPresents } from "./work-panel-data"
+import { workAttachments, workOutputs, workPresents } from "./work-panel-data"
 
 const dir = "/work/project"
 
@@ -167,5 +167,56 @@ describe("present_files", () => {
       { id: "c", paths: [`${dir}/c.docx`, `${dir}/d.pptx`] },
     ])
     expect(workPresents({ messages: undefined, parts: {} })).toEqual([])
+  })
+})
+
+describe("workAttachments", () => {
+  const user = (id: string, created: number) => ({ id, sessionID: "ses", role: "user", time: { created } }) as Message
+  const attachment = (id: string, messageID: string, filename: string, url = "data:application/pdf;base64,AA==") =>
+    ({ id, sessionID: "ses", messageID, type: "file", mime: "application/pdf", filename, url }) as Part
+
+  test("lists uploaded attachments newest first with their folder when known", () => {
+    const result = workAttachments({
+      messages: [user("m1", 1), user("m2", 2)],
+      parts: {
+        m1: [attachment("p1", "m1", "/Users/me/Downloads/KXCO.pdf")],
+        m2: [attachment("p2", "m2", "notes.pdf")],
+      },
+    })
+    expect(result).toEqual([
+      {
+        messageID: "m2",
+        partID: "p2",
+        name: "notes.pdf",
+        mime: "application/pdf",
+        path: undefined,
+        folder: "",
+        time: 2,
+      },
+      {
+        messageID: "m1",
+        partID: "p1",
+        name: "KXCO.pdf",
+        mime: "application/pdf",
+        path: "/Users/me/Downloads/KXCO.pdf",
+        folder: "Downloads",
+        time: 1,
+      },
+    ])
+  })
+
+  test("skips assistant files, file:// references, and inline @mentions", () => {
+    const mention = {
+      ...attachment("p3", "m1", "src/a.ts"),
+      source: { type: "file", path: "src/a.ts", text: { value: "@src/a.ts", start: 0, end: 9 } },
+    } as Part
+    const result = workAttachments({
+      messages: [user("m1", 1), message("a1")],
+      parts: {
+        m1: [attachment("p2", "m1", "/x/y.pdf", "file:///x/y.pdf"), mention],
+        a1: [attachment("p4", "a1", "/x/z.pdf")],
+      },
+    })
+    expect(result).toEqual([])
   })
 })

@@ -36,6 +36,7 @@ export const dict = {
   "omni.work.files.title": "Files",
   "omni.work.files.toggle": "Toggle files",
   "omni.work.files.meta": "{{folder}} · {{time}}",
+  "omni.work.files.attached": "Attached",
   "omni.work.outputs.empty": "Finished files will appear here.",
   "omni.work.outputs.openFailed": "Could not open file",
   "omni.work.outputs.missing": "This file no longer exists.",

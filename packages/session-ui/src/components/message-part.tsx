@@ -1271,7 +1271,7 @@ export function UserMessageDisplay(props: {
             const type = kind(file)
             const name = file.filename ?? i18n.t("ui.message.attachment.alt")
 
-            return (
+            const card = () => (
               <Show
                 when={newLayout() && type === "file"}
                 fallback={
@@ -1306,6 +1306,17 @@ export function UserMessageDisplay(props: {
                 >
                   {typeLabel(name, file.mime, i18n.t("ui.common.file"))}
                 </AttachmentCardV2>
+              </Show>
+            )
+
+            // Omniwork Work mode: a file chip looks like the deliverable cards and opens the in-app preview.
+            return (
+              <Show when={data.workMode && type === "file"} fallback={card()}>
+                <WorkAttachmentCard
+                  name={name}
+                  label={typeLabel(name, file.mime, i18n.t("ui.common.file"))}
+                  onOpen={props.actions?.openAttachment ? () => props.actions?.openAttachment?.(file) : undefined}
+                />
               </Show>
             )
           }}
@@ -1690,6 +1701,44 @@ function WorkFileTool(props: { part: ToolPart }) {
         }}
       </For>
     </div>
+  )
+}
+
+function WorkAttachmentCard(props: { name: string; label: string; onOpen?: () => void }) {
+  const content = () => (
+    <>
+      <FileIcon node={{ path: props.name, type: "file" }} />
+      <span data-slot="work-file-card-text">
+        <span data-slot="work-file-card-name" class="text-13-medium">
+          {getFilename(props.name)}
+        </span>
+        <span data-slot="work-file-card-kind" class="text-12-regular">
+          {props.label}
+        </span>
+      </span>
+    </>
+  )
+  return (
+    <Show
+      when={props.onOpen}
+      fallback={
+        <div data-component="work-file-card" title={props.name}>
+          {content()}
+        </div>
+      }
+    >
+      {(open) => (
+        <button
+          type="button"
+          data-component="work-file-card"
+          data-clickable="true"
+          title={props.name}
+          onClick={() => open()()}
+        >
+          {content()}
+        </button>
+      )}
+    </Show>
   )
 }
 

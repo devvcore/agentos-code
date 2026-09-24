@@ -18,6 +18,7 @@ import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { FSUtil } from "@opencode-ai/core/fs-util"
 import { Plugin } from "../../src/plugin"
 import { testEffect } from "../lib/effect"
+import { attachedMessage } from "../fixture/pdf"
 import { Tool } from "@/tool/tool"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { InstanceStore } from "@/project/instance-store"
@@ -315,6 +316,37 @@ describe("tool.shell permissions", () => {
           )
         }),
       ),
+    )
+  }
+
+  if (process.platform !== "win32") {
+    it.live("reads and copies attached files without granting their directory", () =>
+      Effect.gen(function* () {
+        const outside = yield* tmpdirScoped()
+        const attached = path.join(outside, "KXCO.pdf")
+        const sibling = path.join(outside, "other.pdf")
+        yield* Effect.promise(() => Promise.all([Bun.write(attached, "%PDF-1.4"), Bun.write(sibling, "x")]))
+        yield* runIn(
+          projectRoot,
+          Effect.gen(function* () {
+            const ask = (command: string) =>
+              Effect.gen(function* () {
+                const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+                const err = new Error("stop after permission")
+                yield* run({ command }, { ...capture(requests, err), messages: [attachedMessage(attached)] }).pipe(
+                  Effect.exit,
+                )
+                return requests.filter((r) => r.permission === "external_directory").flatMap((r) => r.patterns)
+              })
+            const dir = path.join(outside, "*")
+            expect(yield* ask(`cat "${attached}"`)).toEqual([])
+            expect(yield* ask(`cp "${attached}" .work-test-copy.pdf`)).toEqual([])
+            expect(yield* ask(`cat "${sibling}"`)).toEqual([dir])
+            expect(yield* ask(`rm "${attached}"`)).toEqual([dir])
+            expect(yield* ask(`cp .work-test-copy.pdf "${attached}"`)).toEqual([dir])
+          }),
+        )
+      }),
     )
   }
 

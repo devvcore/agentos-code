@@ -4,6 +4,7 @@ import type { JSONSchema7 } from "@ai-sdk/provider"
 import type * as Provider from "./provider"
 import type * as ModelsDev from "@opencode-ai/core/models-dev"
 import { iife } from "@/util/iife"
+import path from "path"
 
 type Modality = NonNullable<ModelsDev.Model["modalities"]>["input"][number]
 
@@ -433,10 +434,16 @@ function unsupportedParts(msgs: ModelMessage[], model: Provider.Model): ModelMes
       if (!modality) return part
       if (model.capabilities.input[modality]) return part
 
-      const name = filename ? `"${filename}"` : modality
+      // PDFs normally arrive here already converted to text (SessionAttachment.pdfText); this covers
+      // media the conversation cannot carry at all.
+      const name = filename ? `${modality} "${path.basename(filename)}"` : `${modality} file`
+      const next =
+        filename && path.isAbsolute(filename)
+          ? ` The original is at ${filename}; work with it through your tools.`
+          : " Tell the user and ask for it in another format if the content is needed."
       return {
         type: "text" as const,
-        text: `ERROR: Cannot read ${name} (this model does not support ${modality} input). Inform the user.`,
+        text: `The attached ${name} could not be passed to this conversation directly.${next}`,
       }
     })
 

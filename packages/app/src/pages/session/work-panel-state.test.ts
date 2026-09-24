@@ -75,7 +75,10 @@ describe("workPanelReduce seed", () => {
 
 describe("turn end auto-open", () => {
   test("opens the newest deliverable not seen before", () => {
-    const state = run(seeded(["/w/old.pdf"]), { type: "turnEnd", outputs: ["/w/new2.pdf", "/w/new1.pdf", "/w/old.pdf"] })
+    const state = run(seeded(["/w/old.pdf"]), {
+      type: "turnEnd",
+      outputs: ["/w/new2.pdf", "/w/new1.pdf", "/w/old.pdf"],
+    })
     expect(state).toMatchObject({ view: "preview", path: "/w/new2.pdf" })
     expect(state.seen).toEqual(["/w/old.pdf", "/w/new2.pdf", "/w/new1.pdf"])
   })
@@ -171,5 +174,41 @@ describe("present_files auto-open", () => {
   test("a part without files only records itself", () => {
     const state = run(seeded(), { type: "present", presents: [{ id: "p1", paths: [] }] })
     expect(state).toMatchObject({ view: "closed", presented: ["p1"] })
+  })
+})
+
+describe("workPanelReduce attachments", () => {
+  const ref = { messageID: "msg_user", partID: "prt_file" }
+
+  test("opening an attachment previews it by reference only", () => {
+    const next = run(WORK_PANEL_CLOSED, { type: "attachment", ref })
+    expect(next.view).toBe("preview")
+    expect(next.attachment).toEqual(ref)
+    expect(next.path).toBeUndefined()
+    // Persisted state never carries the attachment bytes.
+    expect(JSON.stringify(next)).not.toContain("data:")
+  })
+
+  test("path and attachment previews replace each other", () => {
+    const withPath = run(WORK_PANEL_CLOSED, { type: "open", path: "/w/outputs/a.pdf" }, { type: "attachment", ref })
+    expect(withPath.path).toBeUndefined()
+    expect(withPath.attachment).toEqual(ref)
+    const back = run(withPath, { type: "open", path: "/w/outputs/a.pdf" })
+    expect(back.attachment).toBeUndefined()
+    expect(back.path).toBe("/w/outputs/a.pdf")
+  })
+
+  test("back, files, and close clear the attachment", () => {
+    const open = run(WORK_PANEL_CLOSED, { type: "attachment", ref })
+    expect(run(open, { type: "back" })).toMatchObject({ view: "files", attachment: undefined })
+    expect(run(open, { type: "files" })).toMatchObject({ view: "files", attachment: undefined })
+    expect(run(open, { type: "close" })).toMatchObject({ view: "closed", attachment: undefined })
+  })
+
+  test("auto-open never replaces an attachment preview", () => {
+    const open = run(seeded(), { type: "attachment", ref })
+    const next = run(open, { type: "turnEnd", outputs: ["/w/outputs/new.pdf"] })
+    expect(next.attachment).toEqual(ref)
+    expect(next.view).toBe("preview")
   })
 })

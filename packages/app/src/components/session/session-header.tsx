@@ -22,7 +22,7 @@ import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
 import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
-import { useWorkOutputs } from "@/pages/session/work-panel"
+import { useWorkAttachments, useWorkOutputs } from "@/pages/session/work-panel"
 import { useWorkPanel } from "@/pages/session/work-preview"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
@@ -170,10 +170,11 @@ export function SessionHeader(props: { work?: boolean }) {
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const workPanel = useWorkPanel()
   const workOutputs = useWorkOutputs(() => (props.work ? params.id : undefined))
-  // Work mode's Files entry point only appears once the session has a deliverable.
+  const workAttachments = useWorkAttachments(() => (props.work ? params.id : undefined))
+  // Work mode's Files entry point only appears once the session has a deliverable or an attachment.
   const files = createMemo(() => {
     const id = params.id
-    const count = workOutputs().length
+    const count = workOutputs().length + workAttachments().length
     if (!props.work || !id || !isDesktop() || count === 0) return
     return {
       count,

@@ -1,4 +1,6 @@
-import type { Message, Part, ToolPart } from "@opencode-ai/sdk/v2"
+import type { FilePart, Message, Part, ToolPart } from "@opencode-ai/sdk/v2"
+import { attached } from "@opencode-ai/session-ui/message-file"
+import { getFilename } from "@opencode-ai/core/util/path"
 
 export type WorkOutput = {
   /** Absolute path on disk */
@@ -31,7 +33,8 @@ function changes(part: ToolPart): Change[] {
   if (part.state.status !== "completed") return []
   const state = part.state
   const time = state.time.end
-  if (part.tool === "present_files") return presented(part).map((path) => ({ path, removed: false, time, presented: true }))
+  if (part.tool === "present_files")
+    return presented(part).map((path) => ({ path, removed: false, time, presented: true }))
   if (part.tool === "write") {
     const path = text(state.input.filePath)
     return path ? [{ path, removed: false, time }] : []
@@ -102,13 +105,53 @@ export function workOutputs(input: {
 }
 
 /** Completed `present_files` parts in the order they ran, with the absolute paths they showed. */
-export function workPresents(input: {
-  messages: Message[] | undefined
-  parts: Record<string, Part[] | undefined>
-}) {
+export function workPresents(input: { messages: Message[] | undefined; parts: Record<string, Part[] | undefined> }) {
   return (input.messages ?? [])
     .flatMap((message) => input.parts[message.id] ?? [])
     .filter((part): part is ToolPart => part.type === "tool" && part.tool === "present_files")
     .filter((part) => part.state.status === "completed")
     .map((part) => ({ id: part.id, paths: presented(part) }))
+}
+
+export type WorkAttachment = {
+  messageID: string
+  partID: string
+  name: string
+  mime: string
+  /** On-disk path the attaching client recorded, when it is absolute */
+  path?: string
+  /** Parent folder name of `path`, when known */
+  folder: string
+  time: number
+}
+
+/**
+ * Files the user attached to messages in this session, newest first. Only uploaded attachments
+ * (bytes carried as a data: URL) count; inline @file mentions of project files do not.
+ */
+export function workAttachments(input: {
+  messages: Message[] | undefined
+  parts: Record<string, Part[] | undefined>
+}): WorkAttachment[] {
+  return (input.messages ?? [])
+    .filter((message) => message.role === "user")
+    .flatMap((message) =>
+      (input.parts[message.id] ?? [])
+        .filter((part): part is FilePart => part.type === "file" && attached(part))
+        .map((part): WorkAttachment => {
+          const filename = part.filename ?? ""
+          const path = absolute(filename) ? filename : undefined
+          const segments = path ? path.split(/[\\/]/) : []
+          return {
+            messageID: message.id,
+            partID: part.id,
+            name: getFilename(filename) || filename,
+            mime: part.mime,
+            path,
+            folder: segments.length > 1 ? segments[segments.length - 2] : "",
+            time: message.time.created,
+          }
+        }),
+    )
+    .reverse()
 }

@@ -86,6 +86,7 @@ import { SessionSidePanel } from "@/pages/session/session-side-panel"
 import { WorkPanel } from "@/pages/session/work-panel"
 import { workSessionWidth } from "@/pages/session/work-panel-state"
 import { useWorkPanel } from "@/pages/session/work-preview"
+import { workAttachmentTarget } from "@/pages/session/work-preview-source"
 import { sessionPanelLayout } from "@/pages/session/session-panel-layout"
 import { SessionReviewEmptyChangesV2 } from "@opencode-ai/session-ui/v2/session-review-empty-changes-v2"
 import { SessionReviewEmptyNoGitV2 } from "@opencode-ai/session-ui/v2/session-review-empty-no-git-v2"
@@ -1919,8 +1920,14 @@ export default function Page() {
   })
 
   // attachment bytes are embedded as a data URL, so downloading always works;
-  // revealing requires the on-disk path captured by the client that attached the file
+  // revealing requires the on-disk path captured by the client that attached the file.
+  // Work mode previews the attachment in the WorkPanel instead of leaving the app.
   const openAttachment = (file: FilePart) => {
+    const ref = workAttachmentTarget(file, { work: work(), sessionID: params.id })
+    if (ref) {
+      workPanel.openAttachment(file.sessionID, ref)
+      return
+    }
     const download = () => {
       const anchor = document.createElement("a")
       anchor.href = file.url

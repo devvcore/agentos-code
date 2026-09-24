@@ -4,12 +4,15 @@ import { InstanceState } from "@/effect/instance-state"
 import type * as Tool from "./tool"
 import { containsPath } from "../project/instance-context"
 import { FSUtil } from "@opencode-ai/core/fs-util"
+import { SessionAttachment } from "@/session/attachment"
 
 type Kind = "file" | "directory"
 
 type Options = {
   bypass?: boolean
   kind?: Kind
+  /** Read-only access: files the user attached to this session's messages are allowed as-is. */
+  read?: boolean
 }
 
 export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirectory")(function* (
@@ -26,6 +29,9 @@ export const assertExternalDirectoryEffect = Effect.fn("Tool.assertExternalDirec
   if (containsPath(full, ins)) return false
 
   const kind = options?.kind ?? "file"
+  if (options?.read && kind === "file" && SessionAttachment.paths(ctx.messages).has(SessionAttachment.normalize(full)))
+    return false
+
   const dir = kind === "directory" ? full : path.dirname(full)
   const glob =
     process.platform === "win32"

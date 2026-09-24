@@ -5,6 +5,7 @@ import { Persist, persisted } from "@/utils/persist"
 import {
   WORK_PANEL_CLOSED,
   workPanelReduce,
+  type WorkAttachmentRef,
   type WorkPanelAction,
   type WorkPanelState,
 } from "@/pages/session/work-panel-state"
@@ -50,9 +51,12 @@ function createWorkPanelStore(platform: Platform) {
     state: get,
     view: (sessionID: string) => get(sessionID).view,
     path: (sessionID: string) => (get(sessionID).view === "preview" ? get(sessionID).path : undefined),
+    attachment: (sessionID: string) => (get(sessionID).view === "preview" ? get(sessionID).attachment : undefined),
     dispatch,
     openFiles: (sessionID: string) => dispatch(sessionID, { type: "files" }),
     open: (sessionID: string, path: string) => dispatch(sessionID, { type: "open", path }),
+    /** Preview a message attachment; only the reference is persisted. */
+    openAttachment: (sessionID: string, ref: WorkAttachmentRef) => dispatch(sessionID, { type: "attachment", ref }),
     close: (sessionID: string) => dispatch(sessionID, { type: "close" }),
     toggleFiles: (sessionID: string) => dispatch(sessionID, { type: "toggle" }),
     back: (sessionID: string) => dispatch(sessionID, { type: "back" }),

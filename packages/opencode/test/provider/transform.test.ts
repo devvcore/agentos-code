@@ -6209,3 +6209,63 @@ describe("ProviderTransform.options - kimi family adaptive thinking", () => {
     expect(result.thinking).toBeUndefined()
   })
 })
+
+describe("ProviderTransform.message - media the model cannot take", () => {
+  const model = {
+    id: "test/text-only",
+    providerID: "test",
+    api: { id: "text-only", url: "https://example.com", npm: "@ai-sdk/openai-compatible" },
+    name: "Text only",
+    capabilities: {
+      input: { text: true, audio: false, image: false, video: false, pdf: false },
+      output: { text: true, audio: false, image: false, video: false, pdf: false },
+    },
+    options: {},
+    headers: {},
+  } as any
+
+  test("points at the original file when its path is known", () => {
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "user",
+          content: [
+            {
+              type: "file",
+              mediaType: "audio/mpeg",
+              filename: "/Users/someone/Downloads/call.mp3",
+              data: "data:audio/mpeg;base64,AAAA",
+            },
+          ],
+        },
+      ] as ModelMessage[],
+      model,
+      {},
+    )
+    expect(result[0].content).toEqual([
+      {
+        type: "text",
+        text: 'The attached audio "call.mp3" could not be passed to this conversation directly. The original is at /Users/someone/Downloads/call.mp3; work with it through your tools.',
+      },
+    ])
+  })
+
+  test("asks for another format when there is no local copy", () => {
+    const result = ProviderTransform.message(
+      [
+        {
+          role: "user",
+          content: [{ type: "file", mediaType: "video/mp4", filename: "clip.mp4", data: "data:video/mp4;base64,AAAA" }],
+        },
+      ] as ModelMessage[],
+      model,
+      {},
+    )
+    expect(result[0].content).toEqual([
+      {
+        type: "text",
+        text: 'The attached video "clip.mp4" could not be passed to this conversation directly. Tell the user and ask for it in another format if the content is needed.',
+      },
+    ])
+  })
+})

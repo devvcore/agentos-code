@@ -34,7 +34,9 @@ export const PresentFilesTool = Tool.define<typeof Parameters, Metadata, FSUtil.
           })
 
           // Permission checks come before any stat so paths outside the project are not probed unasked.
-          yield* Effect.forEach(files, (file) => assertExternalDirectoryEffect(ctx, file.path), { discard: true })
+          yield* Effect.forEach(files, (file) => assertExternalDirectoryEffect(ctx, file.path, { read: true }), {
+            discard: true,
+          })
 
           yield* ctx.ask({
             permission: "present_files",

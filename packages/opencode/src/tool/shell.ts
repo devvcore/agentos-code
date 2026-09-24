@@ -21,6 +21,7 @@ import { ChildProcess } from "effect/unstable/process"
 import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner"
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
+import { SessionAttachment } from "@/session/attachment"
 
 export { Parameters } from "./shell/prompt"
 
@@ -48,6 +49,10 @@ const FILES = new Set([
   "new-item",
   "rename-item",
 ])
+// Path arguments these commands only read (for copies, every path but the destination). Files the
+// user attached may be read this way without granting their whole directory.
+const READS = new Set(["cat", "get-content"])
+const COPIES = new Set(["cp", "copy-item", "copy"])
 const CMD_FILES = new Set([
   "copy",
   "del",
@@ -381,6 +386,7 @@ export const ShellTool = Tool.define(
       ps: boolean,
       shell: string,
       instance: InstanceContext,
+      attached: Set<string>,
     ) {
       const scan: Scan = {
         dirs: new Set<string>(),
@@ -395,10 +401,13 @@ export const ShellTool = Tool.define(
         const cmd = ps || shellKind === "cmd" ? tokens[0]?.toLowerCase() : tokens[0]
 
         if (cmd && (FILES.has(cmd) || (shellKind === "cmd" && CMD_FILES.has(cmd)))) {
-          for (const arg of pathArgs(command, ps, shellKind === "cmd")) {
+          const args = pathArgs(command, ps, shellKind === "cmd")
+          for (const [index, arg] of args.entries()) {
             const resolved = yield* argPath(arg, cwd, ps, shell)
             yield* Effect.logInfo("resolved path", { arg, resolved })
             if (!resolved || containsPath(resolved, instance)) continue
+            const reads = READS.has(cmd) || (COPIES.has(cmd) && index < args.length - 1)
+            if (reads && attached.has(SessionAttachment.normalize(resolved))) continue
             const dir = (yield* fs.isDir(resolved)) ? resolved : path.dirname(resolved)
             scan.dirs.add(dir)
           }
@@ -622,7 +631,14 @@ export const ShellTool = Tool.define(
                   const tree = yield* Effect.acquireRelease(parse(params.command, ps), (tree) =>
                     Effect.sync(() => tree.delete()),
                   )
-                  const scan = yield* collect(tree.rootNode, cwd, ps, shell, instanceCtx)
+                  const scan = yield* collect(
+                    tree.rootNode,
+                    cwd,
+                    ps,
+                    shell,
+                    instanceCtx,
+                    SessionAttachment.paths(ctx.messages),
+                  )
                   if (!containsPath(cwd, instanceCtx)) scan.dirs.add(cwd)
                   yield* ask(ctx, scan, params)
                 }),

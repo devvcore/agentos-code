@@ -9,9 +9,18 @@
  */
 export type WorkPanelView = "closed" | "files" | "preview"
 
+/**
+ * A file the user attached to a message. Only this reference is persisted; the preview
+ * re-resolves the part (and its inline bytes) from sync data, so large data URLs never hit storage.
+ */
+export type WorkAttachmentRef = { messageID: string; partID: string }
+
 export type WorkPanelState = {
   view: WorkPanelView
+  /** Project file being previewed. Exclusive with `attachment`. */
   path?: string
+  /** Message attachment being previewed. Exclusive with `path`. */
+  attachment?: WorkAttachmentRef
   seen?: string[]
   presented?: string[]
   dismissed?: boolean
@@ -23,6 +32,7 @@ export type WorkPresent = { id: string; paths: string[] }
 export type WorkPanelAction =
   | { type: "files" }
   | { type: "open"; path: string }
+  | { type: "attachment"; ref: WorkAttachmentRef }
   | { type: "close" }
   | { type: "toggle" }
   | { type: "back" }
@@ -37,11 +47,14 @@ export type WorkPanelAction =
 export const WORK_PANEL_CLOSED: WorkPanelState = { view: "closed" }
 
 export function workPanelReduce(state: WorkPanelState, action: WorkPanelAction): WorkPanelState {
-  if (action.type === "files") return { ...state, view: "files", path: undefined }
-  if (action.type === "open") return { ...state, view: "preview", path: action.path }
-  if (action.type === "close") return { ...state, view: "closed", path: undefined, dismissed: true }
+  if (action.type === "files") return { ...state, view: "files", path: undefined, attachment: undefined }
+  if (action.type === "open") return { ...state, view: "preview", path: action.path, attachment: undefined }
+  if (action.type === "attachment") return { ...state, view: "preview", path: undefined, attachment: { ...action.ref } }
+  if (action.type === "close")
+    return { ...state, view: "closed", path: undefined, attachment: undefined, dismissed: true }
   if (action.type === "toggle") return workPanelReduce(state, { type: state.view === "closed" ? "files" : "close" })
-  if (action.type === "back") return state.view === "preview" ? { ...state, view: "files", path: undefined } : state
+  if (action.type === "back")
+    return state.view === "preview" ? { ...state, view: "files", path: undefined, attachment: undefined } : state
   if (action.type === "seed") {
     if (state.seen) return state
     return { ...state, seen: action.outputs, presented: action.presents.map((item) => item.id) }
@@ -52,7 +65,7 @@ export function workPanelReduce(state: WorkPanelState, action: WorkPanelAction):
   const target = action.quiet ? undefined : workAutoOpen(state, action.outputs)
   const seen = [...state.seen, ...action.outputs.filter((path) => !state.seen?.includes(path))]
   if (!target) return { ...state, seen }
-  return { ...state, seen, view: "preview", path: target }
+  return { ...state, seen, view: "preview", path: target, attachment: undefined }
 }
 
 /**
@@ -76,7 +89,7 @@ function present(state: WorkPanelState, presents: WorkPresent[], quiet?: boolean
   }
   const target = fresh.findLast((item) => item.paths.length > 0)?.paths[0]
   if (quiet || !target) return next
-  return { ...next, view: "preview", path: target }
+  return { ...next, view: "preview", path: target, attachment: undefined }
 }
 
 /** CSS width of the WorkPanel for its view. Closed collapses to nothing. */

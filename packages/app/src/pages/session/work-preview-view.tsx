@@ -6,32 +6,27 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { LoaderV2 } from "@opencode-ai/ui/v2/loader-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import { getFilename } from "@opencode-ai/core/util/path"
 import { ReactIsland } from "@/components/extend/react-island"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
 import { WorkPreviewGrid } from "@/pages/session/work-preview-grid"
+import { PREVIEW_MAX_BYTES, previewApp, previewMime } from "@/pages/session/work-preview"
 import {
-  PREVIEW_MAX_BYTES,
-  previewApp,
-  previewBytes,
-  previewKind,
-  previewMime,
-  previewRelative,
-} from "@/pages/session/work-preview"
-
-type Loaded =
-  | { type: "bytes"; bytes: Uint8Array<ArrayBuffer> }
-  | { type: "too-large"; size: number }
-  | { type: "outside" }
-  | { type: "unsupported" }
+  loadPreview,
+  previewName,
+  previewPath,
+  previewSourceKind,
+  type WorkPreviewSource,
+} from "@/pages/session/work-preview-source"
 
 /**
- * In-panel preview of one Omniwork deliverable. Bytes come from the server's file read endpoint
- * (base64 for binary files); PDF/Office renderers load lazily as React islands.
+ * In-panel preview of one Omniwork file. Project files come from the server's file read endpoint
+ * (base64 for binary files); message attachments decode from the data URL they carry, so files
+ * from outside the project (e.g. ~/Downloads) preview too. PDF/Office renderers load lazily as
+ * React islands.
  */
 export function WorkPreview(props: {
-  path: string
+  source: WorkPreviewSource
   /** Changes when the agent rewrites the file, so the preview reloads. */
   version?: number
   /** Desktop-only "open in default app"; omitted where it can't work. */
@@ -44,23 +39,25 @@ export function WorkPreview(props: {
   const sdk = useSDK()
   const theme = useTheme()
   const language = useLanguage()
-  const kind = createMemo(() => previewKind(props.path))
-  const name = createMemo(() => getFilename(props.path))
-  const app = createMemo(() => previewApp(props.path))
+  const kind = createMemo(() => previewSourceKind(props.source))
+  const name = createMemo(() => previewName(props.source) || language.t("ui.message.attachment.alt"))
+  const path = createMemo(() => previewPath(props.source))
+  const app = createMemo(() => previewApp(name()))
   const openLabel = createMemo(() => {
     const value = app()
     return value ? language.t("omni.work.preview.openIn", { app: value }) : language.t("omni.work.preview.openDefault")
   })
 
   const [file] = createResource(
-    () => ({ path: props.path, version: props.version, kind: kind(), directory: sdk().directory }),
-    async (input): Promise<Loaded> => {
-      if (input.kind === "none") return { type: "unsupported" }
-      const relative = previewRelative(input.directory, input.path)
-      if (!relative) return { type: "outside" }
-      const result = await sdk().client.file.read({ path: relative })
-      return previewBytes(result.data!)
-    },
+    () => ({ source: props.source, version: props.version, directory: sdk().directory }),
+    (input) =>
+      loadPreview(input.source, {
+        directory: input.directory,
+        read: (relative) =>
+          sdk()
+            .client.file.read({ path: relative })
+            .then((result) => result.data!),
+      }),
   )
   // Gate on state so reading the resource never suspends an enclosing Suspense boundary.
   const loaded = createMemo(() => (file.state === "ready" ? file() : undefined))
@@ -75,7 +72,9 @@ export function WorkPreview(props: {
   const image = createMemo(() => {
     const value = bytes()
     if (!value || kind() !== "image") return
-    const url = URL.createObjectURL(new Blob([value], { type: previewMime(props.path) }))
+    const source = props.source
+    const mime = source.type === "inline" && source.mime.startsWith("image/") ? source.mime : previewMime(name())
+    const url = URL.createObjectURL(new Blob([value], { type: mime }))
     onCleanup(() => URL.revokeObjectURL(url))
     return url
   })
@@ -115,8 +114,8 @@ export function WorkPreview(props: {
             </TooltipV2>
           )}
         </Show>
-        <FileIcon node={{ path: props.path, type: "file" }} class="size-5 shrink-0" />
-        <h2 class="min-w-0 flex-1 truncate text-14-medium text-v2-text-text-base" title={props.path}>
+        <FileIcon node={{ path: name(), type: "file" }} class="size-5 shrink-0" />
+        <h2 class="min-w-0 flex-1 truncate text-14-medium text-v2-text-text-base" title={path() ?? name()}>
           {name()}
         </h2>
         <Show when={props.onOpen}>
@@ -166,7 +165,7 @@ export function WorkPreview(props: {
               <OpenButton label={openLabel()} onOpen={props.onOpen} />
             </Notice>
           </Match>
-          <Match when={loaded()?.type === "unsupported"}>
+          <Match when={loaded()?.type === "unsupported" || loaded()?.type === "unavailable"}>
             <Notice
               icon="review"
               title={language.t("omni.work.preview.unsupported.title")}

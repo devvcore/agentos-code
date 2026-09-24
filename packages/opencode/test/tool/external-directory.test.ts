@@ -11,6 +11,7 @@ import { TestInstance, tmpdirScoped } from "../fixture/fixture"
 import type { Permission } from "../../src/permission"
 import { SessionID, MessageID } from "../../src/session/schema"
 import { testEffect } from "../lib/effect"
+import { attachedMessage } from "../fixture/pdf"
 
 const it = testEffect(LayerNode.compile(CrossSpawnSpawner.node))
 
@@ -40,6 +41,26 @@ function makeCtx() {
 }
 
 describe("tool.assertExternalDirectory", () => {
+  it.instance("allows reading exactly the files the user attached, and nothing next to them", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      const { requests, ctx } = makeCtx()
+      const attached = path.join(path.dirname(test.directory), "Downloads", "KXCO.pdf")
+      const sibling = path.join(path.dirname(attached), "other.pdf")
+      const withAttachment = { ...ctx, messages: [attachedMessage(attached)] }
+
+      yield* assertExternalDirectoryEffect(withAttachment, attached, { read: true })
+      expect(requests).toHaveLength(0)
+
+      yield* assertExternalDirectoryEffect(withAttachment, sibling, { read: true })
+      yield* assertExternalDirectoryEffect(withAttachment, attached)
+      expect(requests.map((r) => r.patterns)).toEqual([
+        [glob(path.join(path.dirname(attached), "*"))],
+        [glob(path.join(path.dirname(attached), "*"))],
+      ])
+    }),
+  )
+
   it.live("no-ops for empty target", () =>
     Effect.gen(function* () {
       const { requests, ctx } = makeCtx()
