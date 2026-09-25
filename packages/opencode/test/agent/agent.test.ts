@@ -106,6 +106,62 @@ it.instance("work agent asks before shell commands that launch desktop apps", ()
   }),
 )
 
+const withAgentOSBuild = <A, E, R>(value: string | undefined, effect: Effect.Effect<A, E, R>) =>
+  Effect.acquireUseRelease(
+    Effect.sync(() => {
+      const previous = process.env.AGENTOS_CODE
+      if (value === undefined) delete process.env.AGENTOS_CODE
+      else process.env.AGENTOS_CODE = value
+      return previous
+    }),
+    () => effect,
+    (previous) =>
+      Effect.sync(() => {
+        if (previous === undefined) delete process.env.AGENTOS_CODE
+        else process.env.AGENTOS_CODE = previous
+      }),
+  )
+
+it.instance("work agent is pinned to GLM 5.3 Flash in the AgentOS build", () =>
+  withAgentOSBuild(
+    "1",
+    Effect.gen(function* () {
+      const work = yield* load((svc) => svc.get("work"))
+      expect(String(work.model?.providerID)).toBe("agentos")
+      expect(String(work.model?.modelID)).toBe("z-ai/glm-5.3-flash")
+      expect(Agent.pinnedModel(work)).toEqual(work.model)
+      const build = yield* load((svc) => svc.get("build"))
+      expect(build.model).toBeUndefined()
+      expect(Agent.pinnedModel(build)).toBeUndefined()
+    }),
+  ),
+)
+
+it.instance("work agent has no pinned model outside the AgentOS build", () =>
+  withAgentOSBuild(
+    undefined,
+    Effect.gen(function* () {
+      const work = yield* load((svc) => svc.get("work"))
+      expect(work.model).toBeUndefined()
+      expect(Agent.pinnedModel(work)).toBeUndefined()
+    }),
+  ),
+)
+
+it.instance(
+  "work agent model config overrides the AgentOS pin",
+  () =>
+    withAgentOSBuild(
+      "1",
+      Effect.gen(function* () {
+        const work = yield* load((svc) => svc.get("work"))
+        expect(String(work.model?.providerID)).toBe("agentos")
+        expect(String(work.model?.modelID)).toBe("moonshotai/kimi-k2")
+      }),
+    ),
+  { config: { agent: { work: { model: "agentos/moonshotai/kimi-k2" } } } },
+)
+
 it.instance("work agent allows external_directory access to OS temp dirs", () =>
   Effect.gen(function* () {
     const work = yield* load((svc) => svc.get("work"))

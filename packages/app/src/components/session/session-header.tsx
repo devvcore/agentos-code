@@ -22,14 +22,11 @@ import { useSync } from "@/context/sync"
 import { useTerminal } from "@/context/terminal"
 import { focusTerminalById } from "@/pages/session/helpers"
 import { useSessionLayout } from "@/pages/session/session-layout"
-import { useWorkAttachments, useWorkOutputs } from "@/pages/session/work-panel"
-import { useWorkPanel } from "@/pages/session/work-preview"
 import { messageAgentColor } from "@/utils/agent"
 import { decode64 } from "@/utils/base64"
 import { fileManagerApp } from "@/utils/file-manager"
 import { Persist, persisted } from "@/utils/persist"
 import { StatusPopover, StatusPopoverV2 } from "../status-popover"
-import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
@@ -168,23 +165,6 @@ export function SessionHeader(props: { work?: boolean }) {
   const search = settings.visibility.search
   const status = settings.visibility.status
   const isDesktop = createMediaQuery("(min-width: 768px)")
-  const workPanel = useWorkPanel()
-  const workOutputs = useWorkOutputs(() => (props.work ? params.id : undefined))
-  const workAttachments = useWorkAttachments(() => (props.work ? params.id : undefined), workOutputs)
-  // Work mode's Files entry point only appears once the session has a deliverable or an attachment.
-  const files = createMemo(() => {
-    const id = params.id
-    const count = workOutputs().length + workAttachments().length
-    if (!props.work || !id || !isDesktop() || count === 0) return
-    return {
-      count,
-      label: language.t("omni.work.files.title"),
-      toggleLabel: language.t("omni.work.files.toggle"),
-      keybind: command.keybindParts("work.files.toggle"),
-      opened: workPanel.view(id) !== "closed",
-      onToggle: () => workPanel.toggleFiles(id),
-    }
-  })
 
   const [exists, setExists] = createStore<Partial<Record<OpenApp, boolean>>>({
     finder: true,
@@ -262,7 +242,6 @@ export function SessionHeader(props: { work?: boolean }) {
     reviewVisible: isDesktop() && !props.work,
     reviewOpened: view().reviewPanel.opened(),
     onReviewToggle: () => view().reviewPanel.toggle(),
-    files: files(),
   }))
 
   const selectApp = (app: OpenApp) => {
@@ -466,25 +445,6 @@ export function SessionHeader(props: { work?: boolean }) {
                         <StatusPopover />
                       </Tooltip>
                     </Show>
-                    <Show when={files()}>
-                      {(item) => (
-                        <TooltipKeybind title={item().toggleLabel} keybind={command.keybind("work.files.toggle")}>
-                          <Button
-                            variant="ghost"
-                            class="titlebar-icon h-6 px-2 gap-1.5 box-border shrink-0"
-                            classList={{ "text-text-strong": item().opened }}
-                            onClick={item().onToggle}
-                            aria-label={item().toggleLabel}
-                            aria-expanded={item().opened}
-                            aria-controls="work-panel"
-                          >
-                            <Icon size="small" name="folder" />
-                            <span class="text-12-medium">{item().label}</span>
-                            <span class="text-12-regular tabular-nums text-text-weak">{item().count}</span>
-                          </Button>
-                        </TooltipKeybind>
-                      )}
-                    </Show>
                     <Show when={!props.work}>
                       <TooltipKeybind
                         title={language.t("command.terminal.toggle")}
@@ -566,16 +526,6 @@ type SessionHeaderV2ActionsState = {
   reviewVisible: boolean
   reviewOpened: boolean
   onReviewToggle: () => void
-  files?: WorkFilesButtonState
-}
-
-type WorkFilesButtonState = {
-  count: number
-  label: string
-  toggleLabel: string
-  keybind: string[]
-  opened: boolean
-  onToggle: () => void
 }
 
 function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
@@ -614,40 +564,6 @@ function SessionHeaderV2Actions(props: { state: SessionHeaderV2ActionsState }) {
             icon={<IconV2 name="sidebar-right" />}
           />
         </TooltipV2>
-      </Show>
-      <Show when={props.state.files}>
-        {(files) => (
-          <TooltipV2
-            class="shrink-0"
-            placement="bottom"
-            value={
-              <>
-                {files().toggleLabel}
-                <Show when={files().keybind.length > 0}>
-                  <KeybindV2 keys={files().keybind} variant="neutral" />
-                </Show>
-              </>
-            }
-          >
-            <ButtonV2
-              type="button"
-              variant="ghost-muted"
-              size="large"
-              class="shrink-0 gap-1.5"
-              data-state={files().opened ? "pressed" : undefined}
-              onClick={files().onToggle}
-              aria-label={files().toggleLabel}
-              aria-expanded={files().opened}
-              aria-controls="work-panel"
-              icon="folder"
-            >
-              {files().label}
-              <span class="min-w-4 rounded-full bg-v2-overlay-simple-overlay-hover px-1.5 text-12-medium tabular-nums text-v2-text-text-muted">
-                {files().count}
-              </span>
-            </ButtonV2>
-          </TooltipV2>
-        )}
       </Show>
     </div>
   )

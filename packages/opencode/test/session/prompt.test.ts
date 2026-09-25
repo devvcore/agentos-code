@@ -2383,6 +2383,45 @@ noLLMServer.instance(
   },
 )
 
+noLLMServer.instance(
+  "work agent pinned model wins over the model the client sends",
+  () =>
+    Effect.gen(function* () {
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      const session = yield* sessions.create({})
+
+      const sent = yield* prompt.prompt({
+        sessionID: session.id,
+        agent: "work",
+        model: { providerID: ProviderV2.ID.make("opencode"), modelID: ModelV2.ID.make("kimi-k2.5-free") },
+        variant: "high",
+        noReply: true,
+        parts: [{ type: "text", text: "hello" }],
+      })
+      if (sent.info.role !== "user") throw new Error("expected user message")
+      expect(sent.info.model).toEqual({
+        providerID: ProviderV2.ID.make("test"),
+        modelID: ModelV2.ID.make("test-model"),
+        variant: undefined,
+      })
+      expect((yield* sessions.get(session.id)).model?.id).toBe(ModelV2.ID.make("test-model"))
+
+      const build = yield* prompt.prompt({
+        sessionID: session.id,
+        agent: "build",
+        model: { providerID: ProviderV2.ID.make("opencode"), modelID: ModelV2.ID.make("kimi-k2.5-free") },
+        noReply: true,
+        parts: [{ type: "text", text: "hello build" }],
+      })
+      if (build.info.role !== "user") throw new Error("expected user message")
+      expect(String(build.info.model.modelID)).toBe("kimi-k2.5-free")
+
+      yield* sessions.remove(session.id)
+    }),
+  { config: { ...cfg, agent: { work: { model: "test/test-model" } } } },
+)
+
 // Agent / command resolution errors
 
 noLLMServer.instance(

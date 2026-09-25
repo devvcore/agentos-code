@@ -7,8 +7,11 @@ import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { useProviders } from "@/hooks/use-providers"
 import { resolveDefaultModel } from "@/hooks/provider-catalog"
+import { pinnedModel } from "@/context/local-agent"
 
-export function createPromptModelSelection(input: { agent: () => { model?: ModelKey; variant?: string } | undefined }) {
+export function createPromptModelSelection(input: {
+  agent: () => { name: string; model?: ModelKey; variant?: string } | undefined
+}) {
   const sdk = useSDK()
   const sync = useSync()
   const models = useModels()
@@ -36,8 +39,10 @@ export function createPromptModelSelection(input: { agent: () => { model?: Model
     })[0]
   }
 
+  const pinned = () => pinnedModel(input.agent())
+
   const current = () => {
-    const key = [prompt.model.current(), input.agent()?.model, configured(), recent(), fallback()].find(
+    const key = [pinned(), prompt.model.current(), input.agent()?.model, configured(), recent(), fallback()].find(
       (item): item is ModelKey => !!item && valid(item),
     )
     if (!key) return
@@ -53,6 +58,7 @@ export function createPromptModelSelection(input: { agent: () => { model?: Model
   const selection = {
     ready: models.ready,
     current,
+    pinned,
     recent: recentModels,
     list: models.list,
     cycle(direction: 1 | -1) {
@@ -90,6 +96,8 @@ export function createPromptModelSelection(input: { agent: () => { model?: Model
         return prompt.model.current()?.variant
       },
       current() {
+        // Variants picked for other models do not apply to the pinned one.
+        if (pinned()) return this.configured()
         const resolved = resolveModelVariant({
           variants: this.list(),
           selected: this.selected(),

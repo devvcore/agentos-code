@@ -63,7 +63,7 @@ import { fileManagerApp } from "@/utils/file-manager"
 import { getRelativeTime } from "@/utils/time"
 import { showToast } from "@/utils/toast"
 
-/** The session's deliverables, newest first. Shared by the panel and the header Files button. */
+/** The session's deliverables, newest first. Shared by the panel and the title row Files button. */
 export function useWorkOutputs(sessionID: () => string | undefined) {
   const sync = useSync()
   const sdk = useSDK()

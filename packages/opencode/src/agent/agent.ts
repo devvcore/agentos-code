@@ -59,6 +59,14 @@ export const Info = Schema.Struct({
 }).annotate({ identifier: "Agent" })
 export type Info = DeepMutable<Schema.Schema.Type<typeof Info>>
 
+// The AgentOS build runs Omniwork on one model with no model picker. `agent.work.model` in config still overrides it.
+export const WORK_MODEL = "agentos/z-ai/glm-5.3-flash"
+
+// Omniwork's model is authoritative: it wins over whatever model the client sends with a prompt.
+export function pinnedModel(agent: Info) {
+  return agent.name === "work" ? agent.model : undefined
+}
+
 const GeneratedAgent = Schema.Struct({
   identifier: Schema.String,
   whenToUse: Schema.String,
@@ -196,6 +204,7 @@ const layer = Layer.effect(
             description:
               "Omniwork. Knowledge work on your files: spreadsheets, documents, slide decks, PDFs, data analysis, and research.",
             prompt: PROMPT_WORK,
+            ...(process.env.AGENTOS_CODE === "1" && { model: Provider.parseModel(WORK_MODEL) }),
             options: {},
             permission: Permission.merge(
               defaults,

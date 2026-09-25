@@ -14,6 +14,7 @@ import {
 import { createStore, produce } from "solid-js/store"
 import { Dynamic } from "solid-js/web"
 import { useNavigate } from "@solidjs/router"
+import { createMediaQuery } from "@solid-primitives/media"
 import { useMutation } from "@tanstack/solid-query"
 import { createVirtualizer, defaultRangeExtractor, elementScroll, type VirtualItem } from "@tanstack/solid-virtual"
 import { Accordion } from "@opencode-ai/ui/accordion"
@@ -60,6 +61,7 @@ import { normalize } from "@opencode-ai/session-ui/session-diff"
 import { useFileComponent } from "@opencode-ai/ui/context/file"
 import { shouldMarkBoundaryGesture, normalizeWheelDelta } from "@/pages/session/message-gesture"
 import { SessionContextUsage } from "@/components/session-context-usage"
+import { WorkFilesButton } from "@/pages/session/work-files-button"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import { useSessionKey } from "@/pages/session/session-layout"
@@ -365,6 +367,7 @@ export function MessageTimeline(props: {
     work: () => !!props.work,
   })
   const workMode = () => !!props.work
+  const isDesktop = createMediaQuery("(min-width: 768px)")
   const activeMessageID = projection.activeMessageID
   const assistantMessagesByParent = projection.assistantMessagesByParent
   const lastAssistantGroupKey = projection.lastAssistantGroupKey
@@ -590,7 +593,7 @@ export function MessageTimeline(props: {
     open: false,
     dismiss: null as "escape" | "outside" | null,
   })
-  let more: HTMLButtonElement | undefined
+  let more: HTMLElement | undefined
 
   const bindListRoot = (root: HTMLDivElement) => {
     if (root === listRoot()) return
@@ -1327,6 +1330,69 @@ export function MessageTimeline(props: {
     )
   }
 
+  // A menu queues Rename or Share and runs it once closed, so the title editor or popover gets focus.
+  const menuCloseAutoFocus = (event: Event) => {
+    if (title.pendingRename) {
+      event.preventDefault()
+      setTitle("pendingRename", false)
+      openTitleEditor()
+      return
+    }
+    if (title.pendingShare) {
+      event.preventDefault()
+      requestAnimationFrame(() => {
+        setShare({ open: true, dismiss: null })
+        setTitle("pendingShare", false)
+      })
+    }
+  }
+
+  // Session actions for the title row menu, and in Work mode the title's context menu.
+  const sessionMenuItems = (id: string) => (
+    <>
+      <MenuV2.Item
+        onSelect={() => {
+          setTitle("pendingRename", true)
+          setTitle("menuOpen", false)
+        }}
+      >
+        {language.t("common.rename")}
+      </MenuV2.Item>
+      <Show when={shareEnabled()}>
+        <MenuV2.Item
+          onSelect={() => {
+            setTitle({ pendingShare: true, menuOpen: false })
+          }}
+        >
+          {language.t("session.share.action.share")}...
+        </MenuV2.Item>
+      </Show>
+      <MenuV2.Item onSelect={() => exportSession(id)}>{language.t("common.export")}...</MenuV2.Item>
+      <MenuV2.Item onSelect={() => void sessionArchive.archive(id)}>{language.t("common.archive")}</MenuV2.Item>
+      <MenuV2.Separator />
+      <MenuV2.Item onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}>
+        {language.t("common.delete")}...
+      </MenuV2.Item>
+    </>
+  )
+
+  const titleHeading = () => (
+    <h1
+      data-slot="session-title-child"
+      classList={{
+        "truncate text-[13px] font-[530] leading-4 tracking-[-0.04px] text-v2-text-text-base": true,
+        "w-fit rounded-[6px] px-2 py-1 hover:bg-v2-overlay-simple-overlay-hover": settings.general.newLayoutDesigns(),
+        "grow-1 min-w-0": !settings.general.newLayoutDesigns(),
+      }}
+      onClick={openTitleEditor}
+    >
+      {childTitle()}
+    </h1>
+  )
+
+  // Work mode has no "..." button; right-clicking the title opens the same session actions.
+  const workTitleMenu = createMemo(() => (props.work && !parentID() ? sessionID() : undefined))
+
   return (
     <div class="relative w-full h-full min-w-0">
       <div
@@ -1444,18 +1510,29 @@ export function MessageTimeline(props: {
                     <Show
                       when={title.editing}
                       fallback={
-                        <h1
-                          data-slot="session-title-child"
-                          classList={{
-                            "truncate text-[13px] font-[530] leading-4 tracking-[-0.04px] text-v2-text-text-base": true,
-                            "w-fit rounded-[6px] px-2 py-1 hover:bg-v2-overlay-simple-overlay-hover":
-                              settings.general.newLayoutDesigns(),
-                            "grow-1 min-w-0": !settings.general.newLayoutDesigns(),
-                          }}
-                          onClick={openTitleEditor}
-                        >
-                          {childTitle()}
-                        </h1>
+                        <Show when={workTitleMenu()} keyed fallback={titleHeading()}>
+                          {(id) => (
+                            <MenuV2.Context onOpenChange={(open) => setTitle("menuOpen", open)}>
+                              <MenuV2.Context.Trigger
+                                as="div"
+                                class="flex min-w-0"
+                                ref={(el: HTMLDivElement) => {
+                                  more = el
+                                }}
+                              >
+                                {titleHeading()}
+                              </MenuV2.Context.Trigger>
+                              <MenuV2.Context.Portal>
+                                <MenuV2.Context.Content
+                                  style={{ width: "120px", "min-width": "120px" }}
+                                  onCloseAutoFocus={menuCloseAutoFocus}
+                                >
+                                  {sessionMenuItems(id)}
+                                </MenuV2.Context.Content>
+                              </MenuV2.Context.Portal>
+                            </MenuV2.Context>
+                          )}
+                        </Show>
                       }
                     >
                       <InlineInput
@@ -1511,12 +1588,94 @@ export function MessageTimeline(props: {
                         buttonAppearance={settings.general.newLayoutDesigns() ? "v2" : "default"}
                       />
                     </Show>
+                    <Show when={props.work && isDesktop()}>
+                      <WorkFilesButton sessionID={id} />
+                    </Show>
                     <Show when={!parentID()}>
-                      <Show
-                        when={settings.general.newLayoutDesigns()}
-                        fallback={
-                          <DropdownMenu
-                            gutter={4}
+                      <Show when={!props.work}>
+                        <Show
+                          when={settings.general.newLayoutDesigns()}
+                          fallback={
+                            <DropdownMenu
+                              gutter={4}
+                              placement="bottom-end"
+                              open={title.menuOpen}
+                              onOpenChange={(open) => {
+                                setTitle("menuOpen", open)
+                                if (open) return
+                              }}
+                            >
+                              <DropdownMenu.Trigger
+                                as={IconButton}
+                                icon="dot-grid"
+                                variant="ghost"
+                                class="size-6 rounded-md data-[expanded]:bg-surface-base-active"
+                                classList={{
+                                  "bg-surface-base-active": share.open || title.pendingShare,
+                                }}
+                                aria-label={language.t("common.moreOptions")}
+                                aria-expanded={title.menuOpen || share.open || title.pendingShare}
+                                ref={(el: HTMLButtonElement) => {
+                                  more = el
+                                }}
+                              />
+                              <DropdownMenu.Portal>
+                                <DropdownMenu.Content
+                                  style={{ "min-width": "104px" }}
+                                  onCloseAutoFocus={(event) => {
+                                    if (title.pendingRename) {
+                                      event.preventDefault()
+                                      setTitle("pendingRename", false)
+                                      openTitleEditor()
+                                      return
+                                    }
+                                    if (title.pendingShare) {
+                                      event.preventDefault()
+                                      requestAnimationFrame(() => {
+                                        setShare({ open: true, dismiss: null })
+                                        setTitle("pendingShare", false)
+                                      })
+                                    }
+                                  }}
+                                >
+                                  <DropdownMenu.Item
+                                    onSelect={() => {
+                                      setTitle("pendingRename", true)
+                                      setTitle("menuOpen", false)
+                                    }}
+                                  >
+                                    <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                  <Show when={shareEnabled()}>
+                                    <DropdownMenu.Item
+                                      onSelect={() => {
+                                        setTitle({ pendingShare: true, menuOpen: false })
+                                      }}
+                                    >
+                                      <DropdownMenu.ItemLabel>
+                                        {language.t("session.share.action.share")}
+                                      </DropdownMenu.ItemLabel>
+                                    </DropdownMenu.Item>
+                                  </Show>
+                                  <DropdownMenu.Item onSelect={() => exportSession(id)}>
+                                    <DropdownMenu.ItemLabel>{language.t("common.export")}</DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                  <DropdownMenu.Item onSelect={() => void sessionArchive.archive(id)}>
+                                    <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                  <DropdownMenu.Separator />
+                                  <DropdownMenu.Item
+                                    onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
+                                  >
+                                    <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
+                                  </DropdownMenu.Item>
+                                </DropdownMenu.Content>
+                              </DropdownMenu.Portal>
+                            </DropdownMenu>
+                          }
+                        >
+                          <MenuV2
+                            gutter={6}
                             placement="bottom-end"
                             open={title.menuOpen}
                             onOpenChange={(open) => {
@@ -1524,145 +1683,28 @@ export function MessageTimeline(props: {
                               if (open) return
                             }}
                           >
-                            <DropdownMenu.Trigger
-                              as={IconButton}
-                              icon="dot-grid"
-                              variant="ghost"
-                              class="size-6 rounded-md data-[expanded]:bg-surface-base-active"
-                              classList={{
-                                "bg-surface-base-active": share.open || title.pendingShare,
-                              }}
+                            <MenuV2.Trigger
+                              as={IconButtonV2}
+                              icon={<IconV2 name="outline-dots" />}
+                              variant="ghost-muted"
+                              size="large"
+                              state={share.open || title.pendingShare ? "pressed" : undefined}
                               aria-label={language.t("common.moreOptions")}
                               aria-expanded={title.menuOpen || share.open || title.pendingShare}
                               ref={(el: HTMLButtonElement) => {
                                 more = el
                               }}
                             />
-                            <DropdownMenu.Portal>
-                              <DropdownMenu.Content
-                                style={{ "min-width": "104px" }}
-                                onCloseAutoFocus={(event) => {
-                                  if (title.pendingRename) {
-                                    event.preventDefault()
-                                    setTitle("pendingRename", false)
-                                    openTitleEditor()
-                                    return
-                                  }
-                                  if (title.pendingShare) {
-                                    event.preventDefault()
-                                    requestAnimationFrame(() => {
-                                      setShare({ open: true, dismiss: null })
-                                      setTitle("pendingShare", false)
-                                    })
-                                  }
-                                }}
+                            <MenuV2.Portal>
+                              <MenuV2.Content
+                                style={{ width: "120px", "min-width": "120px" }}
+                                onCloseAutoFocus={menuCloseAutoFocus}
                               >
-                                <DropdownMenu.Item
-                                  onSelect={() => {
-                                    setTitle("pendingRename", true)
-                                    setTitle("menuOpen", false)
-                                  }}
-                                >
-                                  <DropdownMenu.ItemLabel>{language.t("common.rename")}</DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
-                                <Show when={shareEnabled()}>
-                                  <DropdownMenu.Item
-                                    onSelect={() => {
-                                      setTitle({ pendingShare: true, menuOpen: false })
-                                    }}
-                                  >
-                                    <DropdownMenu.ItemLabel>
-                                      {language.t("session.share.action.share")}
-                                    </DropdownMenu.ItemLabel>
-                                  </DropdownMenu.Item>
-                                </Show>
-                                <DropdownMenu.Item onSelect={() => exportSession(id)}>
-                                  <DropdownMenu.ItemLabel>{language.t("common.export")}</DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Item onSelect={() => void sessionArchive.archive(id)}>
-                                  <DropdownMenu.ItemLabel>{language.t("common.archive")}</DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Separator />
-                                <DropdownMenu.Item
-                                  onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}
-                                >
-                                  <DropdownMenu.ItemLabel>{language.t("common.delete")}</DropdownMenu.ItemLabel>
-                                </DropdownMenu.Item>
-                              </DropdownMenu.Content>
-                            </DropdownMenu.Portal>
-                          </DropdownMenu>
-                        }
-                      >
-                        <MenuV2
-                          gutter={6}
-                          placement="bottom-end"
-                          open={title.menuOpen}
-                          onOpenChange={(open) => {
-                            setTitle("menuOpen", open)
-                            if (open) return
-                          }}
-                        >
-                          <MenuV2.Trigger
-                            as={IconButtonV2}
-                            icon={<IconV2 name="outline-dots" />}
-                            variant="ghost-muted"
-                            size="large"
-                            state={share.open || title.pendingShare ? "pressed" : undefined}
-                            aria-label={language.t("common.moreOptions")}
-                            aria-expanded={title.menuOpen || share.open || title.pendingShare}
-                            ref={(el: HTMLButtonElement) => {
-                              more = el
-                            }}
-                          />
-                          <MenuV2.Portal>
-                            <MenuV2.Content
-                              style={{ width: "120px", "min-width": "120px" }}
-                              onCloseAutoFocus={(event) => {
-                                if (title.pendingRename) {
-                                  event.preventDefault()
-                                  setTitle("pendingRename", false)
-                                  openTitleEditor()
-                                  return
-                                }
-                                if (title.pendingShare) {
-                                  event.preventDefault()
-                                  requestAnimationFrame(() => {
-                                    setShare({ open: true, dismiss: null })
-                                    setTitle("pendingShare", false)
-                                  })
-                                }
-                              }}
-                            >
-                              <MenuV2.Item
-                                onSelect={() => {
-                                  setTitle("pendingRename", true)
-                                  setTitle("menuOpen", false)
-                                }}
-                              >
-                                {language.t("common.rename")}
-                              </MenuV2.Item>
-                              <Show when={shareEnabled()}>
-                                <MenuV2.Item
-                                  onSelect={() => {
-                                    setTitle({ pendingShare: true, menuOpen: false })
-                                  }}
-                                >
-                                  {language.t("session.share.action.share")}...
-                                </MenuV2.Item>
-                              </Show>
-                              <MenuV2.Item onSelect={() => exportSession(id)}>
-                                {language.t("common.export")}...
-                              </MenuV2.Item>
-                              <MenuV2.Item onSelect={() => void sessionArchive.archive(id)}>
-                                {language.t("common.archive")}
-                              </MenuV2.Item>
-                              <MenuV2.Separator />
-                              <MenuV2.Item onSelect={() => dialog.show(() => <DialogDeleteSession sessionID={id} />)}>
-                                {language.t("common.delete")}...
-                              </MenuV2.Item>
-                            </MenuV2.Content>
-                          </MenuV2.Portal>
-                        </MenuV2>
+                                {sessionMenuItems(id)}
+                              </MenuV2.Content>
+                            </MenuV2.Portal>
+                          </MenuV2>
+                        </Show>
                       </Show>
 
                       <KobaltePopover

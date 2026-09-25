@@ -8,7 +8,7 @@ import { useSettings } from "@/context/settings"
 import { useProviders } from "@/hooks/use-providers"
 import { resolveDefaultModel } from "@/hooks/provider-catalog"
 import { Persist, persisted } from "@/utils/persist"
-import { hasCustomAgent, hasWorkAgent, resolveAgent, selectAgent } from "./local-agent"
+import { hasCustomAgent, hasWorkAgent, pinnedModel, resolveAgent, selectAgent } from "./local-agent"
 import { cycleModelVariant, getConfiguredAgentVariant, resolveModelVariant } from "./model-variant"
 import { useSDK } from "./sdk"
 import { useSync } from "./sync"
@@ -233,8 +233,11 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
       },
     }
 
+    const pinned = () => pinnedModel(agent.current())
+
     const current = () => {
       const item = firstModel(
+        pinned,
         () => scope()?.model,
         () => agent.current()?.model,
         fallback,
@@ -283,6 +286,7 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
     const model = {
       ready: models.ready,
       current,
+      pinned,
       recent,
       list: models.list,
       cycle(direction: 1 | -1) {
@@ -328,6 +332,8 @@ export const { use: useLocal, provider: LocalProvider } = createSimpleContext({
         configured,
         selected,
         current() {
+          // Variants picked for other models do not apply to the pinned one.
+          if (pinned()) return this.configured()
           const resolved = resolveModelVariant({
             variants: this.list(),
             selected: this.selected(),

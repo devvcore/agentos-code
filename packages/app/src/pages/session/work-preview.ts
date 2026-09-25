@@ -28,7 +28,7 @@ const WORK_LOCAL_FILES = 8
 
 /**
  * The Omniwork side panel state for every session, persisted across reloads. Chat file cards,
- * the header Files button, keybinds, and auto-open all drive it; the WorkPanel renders it.
+ * the title row Files button, keybinds, and auto-open all drive it; the WorkPanel renders it.
  */
 export function useWorkPanel() {
   const platform = usePlatform()

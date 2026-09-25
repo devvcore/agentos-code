@@ -1717,7 +1717,7 @@ export const PromptInput: Component<PromptInputProps> = (props) => {
                     </div>
                   </Show>
                   <Show when={!providersLoading()}>
-                    <Show when={store.mode !== "shell"}>
+                    <Show when={store.mode !== "shell" && !props.controls.model.selection.pinned()}>
                       <div
                         data-component="prompt-model-control"
                         classList={{ "animate-in fade-in duration-300": providersShouldFadeIn() }}

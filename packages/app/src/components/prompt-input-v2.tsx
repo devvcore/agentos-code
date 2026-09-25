@@ -99,23 +99,26 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
           }
           decoration={<dictation.Effects />}
           submitDisabled={dictation.busy()}
-          variantControlVisible={!props.controller.model.loading}
+          variantControlVisible={!props.controller.model.loading && !props.controller.model.selection.pinned()}
           attachKeybind={command.keybindParts("file.attach")}
           attachShortcut={command.keybind("file.attach")}
           modelControl={
-            <PromptInputV2ModelControl
-              loading={props.controller.model.loading}
-              paid={props.controller.model.paid}
-              title={language.t("command.model.choose")}
-              keybind={command.keybindParts("model.choose")}
-              model={props.controller.model.selection}
-              providerID={props.controller.model.selection.current()?.provider?.id}
-              modelName={props.controller.model.selection.current()?.name ?? language.t("dialog.model.select.title")}
-              onClose={props.controller.restoreFocus}
-              onUnpaidClick={() =>
-                dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controller.model.selection} />)
-              }
-            />
+            // Work mode runs on its pinned model: no picker, and no fallback picker either.
+            props.controller.model.selection.pinned() ? undefined : (
+              <PromptInputV2ModelControl
+                loading={props.controller.model.loading}
+                paid={props.controller.model.paid}
+                title={language.t("command.model.choose")}
+                keybind={command.keybindParts("model.choose")}
+                model={props.controller.model.selection}
+                providerID={props.controller.model.selection.current()?.provider?.id}
+                modelName={props.controller.model.selection.current()?.name ?? language.t("dialog.model.select.title")}
+                onClose={props.controller.restoreFocus}
+                onUnpaidClick={() =>
+                  dialog.show(() => <DialogSelectModelUnpaidV2 model={props.controller.model.selection} />)
+                }
+              />
+            )
           }
         />
       </Show>

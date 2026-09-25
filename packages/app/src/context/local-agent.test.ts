@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { hasCustomAgent, hasWorkAgent, resolveAgent, selectAgent } from "./local-agent"
+import { hasCustomAgent, hasWorkAgent, pinnedModel, resolveAgent, selectAgent } from "./local-agent"
 
 describe("hasCustomAgent", () => {
   test("detects explicitly custom agents", () => {
@@ -58,5 +58,22 @@ describe("hasWorkAgent", () => {
 
   test("hides Work when the server has no work agent", () => {
     expect(hasWorkAgent([{ name: "build" }, { name: "plan" }])).toBe(false)
+  })
+})
+
+describe("pinnedModel", () => {
+  const glm = { providerID: "agentos", modelID: "z-ai/glm-5.3-flash" }
+
+  test("pins Work mode to the work agent's model, hiding the picker", () => {
+    expect(pinnedModel({ name: "work", model: glm })).toEqual(glm)
+  })
+
+  test("keeps the picker when the work agent has no model", () => {
+    expect(pinnedModel({ name: "work" })).toBeUndefined()
+  })
+
+  test("never pins Code mode or other agents", () => {
+    expect(pinnedModel({ name: "build", model: glm })).toBeUndefined()
+    expect(pinnedModel(undefined)).toBeUndefined()
   })
 })

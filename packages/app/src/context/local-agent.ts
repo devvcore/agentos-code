@@ -14,3 +14,8 @@ export function selectAgent<T extends { name: string }>(items: T[], name: string
 export function hasWorkAgent(items: Array<{ name: string }>) {
   return items.some((item) => item.name === "work")
 }
+
+// The AgentOS build pins Omniwork's model (GLM 5.3 Flash) and the server enforces it, so Work mode shows no model or variant picker.
+export function pinnedModel<T>(agent: { name: string; model?: T } | undefined) {
+  return agent?.name === "work" ? agent.model : undefined
+}

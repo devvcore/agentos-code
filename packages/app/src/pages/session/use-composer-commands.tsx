@@ -53,6 +53,7 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
       description: language.t("command.model.choose.description"),
       keybind: "mod+'",
       slash: "model",
+      disabled: !!model.pinned(),
       onSelect: chooseModel,
     }),
     modelCommand({
@@ -60,6 +61,7 @@ export const useComposerCommands = (input: { model?: ModelSelection } = {}) => {
       title: language.t("command.model.variant.cycle"),
       description: language.t("command.model.variant.cycle.description"),
       keybind: "shift+mod+d",
+      disabled: !!model.pinned(),
       onSelect: () => model.variant.cycle(),
     }),
     agentCommand({
