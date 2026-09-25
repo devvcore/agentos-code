@@ -348,6 +348,19 @@ describe("tool.shell permissions", () => {
         )
       }),
     )
+
+    it.live("does not ask for access to device files like /dev/null", () =>
+      runIn(
+        projectRoot,
+        Effect.gen(function* () {
+          const requests: Array<Omit<PermissionV1.Request, "id" | "sessionID" | "tool">> = []
+          yield* run({ command: "cp notes.txt /dev/null; cat /dev/stdin" }, capture(requests, new Error("stop"))).pipe(
+            Effect.exit,
+          )
+          expect(requests.filter((r) => r.permission === "external_directory")).toEqual([])
+        }),
+      ),
+    )
   }
 
   each("asks for external_directory permission for wildcard external paths", () =>

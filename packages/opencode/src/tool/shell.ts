@@ -54,6 +54,8 @@ const FILES = new Set([
 // user attached may be read this way without granting their whole directory.
 const READS = new Set(["cat", "get-content"])
 const COPIES = new Set(["cp", "copy-item", "copy"])
+// Device files are not user data; `cp x /dev/null` or `cat /dev/stdin` must not ask for access to /dev.
+const DEVICES = new Set(["/dev/null", "/dev/stdin", "/dev/stdout", "/dev/stderr", "/dev/tty", "/dev/zero", "/dev/random", "/dev/urandom"])
 const CMD_FILES = new Set([
   "copy",
   "del",
@@ -406,7 +408,7 @@ export const ShellTool = Tool.define(
           for (const [index, arg] of args.entries()) {
             const resolved = yield* argPath(arg, cwd, ps, shell)
             yield* Effect.logInfo("resolved path", { arg, resolved })
-            if (!resolved || containsPath(resolved, instance)) continue
+            if (!resolved || containsPath(resolved, instance) || DEVICES.has(resolved)) continue
             const reads = READS.has(cmd) || (COPIES.has(cmd) && index < args.length - 1)
             if (reads && attached.has(SessionAttachment.normalize(resolved))) continue
             const dir = (yield* fs.isDir(resolved)) ? resolved : path.dirname(resolved)
