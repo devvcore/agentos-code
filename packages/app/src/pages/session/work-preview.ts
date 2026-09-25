@@ -2,6 +2,7 @@ import { createRoot } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { usePlatform, type Platform } from "@/context/platform"
 import { Persist, persisted } from "@/utils/persist"
+import type { FilePart } from "@opencode-ai/sdk/v2"
 import {
   WORK_PANEL_CLOSED,
   workPanelReduce,
@@ -16,6 +17,14 @@ const WORK_PANEL_SESSIONS = 100
 type Entry = WorkPanelState & { at: number }
 
 const root: { store?: ReturnType<typeof createWorkPanelStore> } = {}
+
+/** The bytes of a clicked attachment, kept in memory only (never persisted). */
+export type WorkLocalFile = Pick<FilePart, "url" | "mime" | "filename">
+
+// Attachment copies kept so a click previews at once, before (or while) sync data carries the
+// part: a message that is still being sent, or a file in the composer that is not sent at all.
+const WORK_LOCAL_FILES = 8
+
 
 /**
  * The Omniwork side panel state for every session, persisted across reloads. Chat file cards,
@@ -33,6 +42,12 @@ function createWorkPanelStore(platform: Platform) {
     createStore<Record<string, Entry | undefined>>({}),
     platform,
   )
+  const local = new Map<string, WorkLocalFile>()
+  const remember = (ref: WorkAttachmentRef, file: WorkLocalFile) => {
+    local.delete(ref.partID)
+    local.set(ref.partID, { url: file.url, mime: file.mime, filename: file.filename })
+    if (local.size > WORK_LOCAL_FILES) local.delete(local.keys().next().value!)
+  }
   const get = (sessionID: string): WorkPanelState => state[sessionID] ?? WORK_PANEL_CLOSED
   const dispatch = (sessionID: string, action: WorkPanelAction) => {
     const current = get(sessionID)
@@ -55,8 +70,16 @@ function createWorkPanelStore(platform: Platform) {
     dispatch,
     openFiles: (sessionID: string) => dispatch(sessionID, { type: "files" }),
     open: (sessionID: string, path: string) => dispatch(sessionID, { type: "open", path }),
-    /** Preview a message attachment; only the reference is persisted. */
-    openAttachment: (sessionID: string, ref: WorkAttachmentRef) => dispatch(sessionID, { type: "attachment", ref }),
+    /**
+     * Preview a message attachment; only the reference is persisted. Pass the part itself when the
+     * caller has it, so the preview opens immediately even while the message is still syncing.
+     */
+    openAttachment: (sessionID: string, ref: WorkAttachmentRef, file?: WorkLocalFile) => {
+      if (file) remember(ref, file)
+      dispatch(sessionID, { type: "attachment", ref })
+    },
+    /** In-memory copy of an attachment passed to `openAttachment`, if still held. */
+    localFile: (ref: WorkAttachmentRef) => local.get(ref.partID),
     close: (sessionID: string) => dispatch(sessionID, { type: "close" }),
     toggleFiles: (sessionID: string) => dispatch(sessionID, { type: "toggle" }),
     back: (sessionID: string) => dispatch(sessionID, { type: "back" }),
@@ -66,7 +89,7 @@ function createWorkPanelStore(platform: Platform) {
 /** Largest file the preview will download and render. */
 export const PREVIEW_MAX_BYTES = 25 * 1024 * 1024
 
-export type PreviewKind = "pdf" | "xlsx" | "docx" | "pptx" | "csv" | "tsv" | "image" | "text" | "none"
+export type PreviewKind = "pdf" | "xlsx" | "docx" | "pptx" | "csv" | "tsv" | "image" | "markdown" | "text" | "none"
 
 const kinds: Record<string, PreviewKind> = {
   pdf: "pdf",
@@ -84,8 +107,8 @@ const kinds: Record<string, PreviewKind> = {
   webp: "image",
   svg: "image",
   txt: "text",
-  md: "text",
-  markdown: "text",
+  md: "markdown",
+  markdown: "markdown",
   json: "text",
   log: "text",
   xml: "text",

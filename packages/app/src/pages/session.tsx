@@ -1925,7 +1925,7 @@ export default function Page() {
   const openAttachment = (file: FilePart) => {
     const ref = workAttachmentTarget(file, { work: work(), sessionID: params.id })
     if (ref) {
-      workPanel.openAttachment(file.sessionID, ref)
+      workPanel.openAttachment(file.sessionID, ref, file)
       return
     }
     const download = () => {

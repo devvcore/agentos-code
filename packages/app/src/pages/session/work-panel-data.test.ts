@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 import type { Message, Part, ToolPart } from "@opencode-ai/sdk/v2"
-import { workAttachments, workOutputs, workPresents } from "./work-panel-data"
+import { workAttachedOnly, workAttachments, workFileVersion, workOutputs, workPresents } from "./work-panel-data"
 
 const dir = "/work/project"
 
@@ -218,5 +218,100 @@ describe("workAttachments", () => {
       },
     })
     expect(result).toEqual([])
+  })
+
+  test("lists a file attached twice once, keeping the newest", () => {
+    const result = workAttachments({
+      messages: [user("m1", 1), user("m2", 2)],
+      parts: {
+        m1: [attachment("p1", "m1", "/Users/me/Downloads/KXCO.pdf"), attachment("p2", "m1", "a.pdf")],
+        m2: [attachment("p3", "m2", "/Users/me/Downloads/KXCO.pdf"), attachment("p4", "m2", "a.pdf")],
+      },
+    })
+    expect(result.map((item) => item.partID)).toEqual(["p4", "p3"])
+  })
+
+  test("keeps different files that share a name but not a path or bytes", () => {
+    const result = workAttachments({
+      messages: [user("m1", 1)],
+      parts: {
+        m1: [
+          attachment("p1", "m1", "/a/report.pdf"),
+          attachment("p2", "m1", "/b/report.pdf"),
+          attachment("p3", "m1", "report.pdf", "data:application/pdf;base64,AA=="),
+          attachment("p4", "m1", "report.pdf", "data:application/pdf;base64,AB=="),
+        ],
+      },
+    })
+    expect(result.map((item) => item.partID)).toEqual(["p4", "p3", "p2", "p1"])
+  })
+
+  test("a part listed twice (optimistic and synced copies) is one row", () => {
+    const part = attachment("p1", "m1", "/a/report.pdf")
+    expect(workAttachments({ messages: [user("m1", 1)], parts: { m1: [part, { ...part }] } })).toHaveLength(1)
+  })
+
+  test("Attached leaves out files already listed as deliverables", () => {
+    const attachments = workAttachments({
+      messages: [user("m1", 1)],
+      parts: { m1: [attachment("p1", "m1", "/Users/me/Downloads/KXCO.pdf"), attachment("p2", "m1", "b.pdf")] },
+    })
+    const outputs = [{ path: "/Users/me/Downloads/KXCO.pdf", name: "KXCO.pdf", folder: "/Users/me/Downloads", time: 2 }]
+    expect(workAttachedOnly(attachments, outputs).map((item) => item.partID)).toEqual(["p2"])
+  })
+})
+
+describe("workFileVersion", () => {
+  const version = (path: string, parts: Part[]) =>
+    workFileVersion({ directory: dir, path, messages: [message("msg")], parts: { msg: parts } })
+
+  test("moves with every write, edit, patch, or present of the file", () => {
+    const path = `${dir}/outputs/report.md`
+    expect(version(path, [tool("a", "write", 1, { filePath: path })])).toBe(1)
+    expect(version(path, [tool("a", "write", 1, { filePath: path }), tool("b", "edit", 5, { filePath: path })])).toBe(5)
+    expect(
+      version(path, [
+        tool("a", "write", 1, { filePath: path }),
+        tool("b", "apply_patch", 7, {}, { files: [{ filePath: "outputs/report.md", type: "update" }] }),
+      ]),
+    ).toBe(7)
+    expect(version(path, [tool("a", "present_files", 3, {}, { files: [{ path }] })])).toBe(3)
+  })
+
+  test("ignores other files and read-only tools", () => {
+    const path = `${dir}/notes/plan.md`
+    expect(
+      version(path, [
+        tool("a", "write", 4, { filePath: `${dir}/outputs/other.md` }),
+        tool("b", "read", 6, { filePath: path }),
+        tool("c", "write", 2, { filePath: path }),
+      ]),
+    ).toBe(2)
+  })
+
+  test("moves when a script, subagent, or recalculation may have rewritten it", () => {
+    const path = `${dir}/outputs/deck.pptx`
+    for (const name of ["bash", "execute", "task", "spreadsheet_recalculate"])
+      expect(version(path, [tool("a", "present_files", 1, {}, { files: [{ path }] }), tool("b", name, 9, {})])).toBe(9)
+  })
+
+  test("running tools do not count until they complete", () => {
+    const running = { ...tool("b", "bash", 9, {}), state: { status: "running", input: {}, time: { start: 8 } } } as Part
+    expect(version(`${dir}/outputs/a.md`, [running])).toBe(0)
+  })
+})
+
+describe("workOutputs rewrites", () => {
+  test("a presented file outside outputs/ keeps its row and takes the rewrite time", () => {
+    const path = `${dir}/notes/plan.md`
+    const result = run([
+      tool("a", "present_files", 1, {}, { files: [{ path }] }),
+      tool("b", "edit", 4, { filePath: path }),
+    ])
+    expect(result).toEqual([{ path, name: "plan.md", folder: "notes", time: 4 }])
+  })
+
+  test("writes outside outputs/ that were never presented stay unlisted", () => {
+    expect(run([tool("a", "write", 1, { filePath: `${dir}/notes/plan.md` })])).toEqual([])
   })
 })

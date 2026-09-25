@@ -6,6 +6,8 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { LoaderV2 } from "@opencode-ai/ui/v2/loader-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
+import { DataProvider, useData } from "@opencode-ai/session-ui/context"
+import { Markdown } from "@opencode-ai/session-ui/markdown"
 import { ReactIsland } from "@/components/extend/react-island"
 import { useLanguage } from "@/context/language"
 import { useSDK } from "@/context/sdk"
@@ -13,9 +15,12 @@ import { WorkPreviewGrid } from "@/pages/session/work-preview-grid"
 import { PREVIEW_MAX_BYTES, previewApp, previewMime } from "@/pages/session/work-preview"
 import {
   loadPreview,
+  previewBytesEqual,
+  previewImageSource,
   previewName,
   previewPath,
   previewSourceKind,
+  type WorkPreviewLoaded,
   type WorkPreviewSource,
 } from "@/pages/session/work-preview-source"
 
@@ -27,7 +32,7 @@ import {
  */
 export function WorkPreview(props: {
   source: WorkPreviewSource
-  /** Changes when the agent rewrites the file, so the preview reloads. */
+  /** Changes when the agent may have rewritten the file, so the preview reloads. */
   version?: number
   /** Desktop-only "open in default app"; omitted where it can't work. */
   onOpen?: () => void
@@ -48,6 +53,9 @@ export function WorkPreview(props: {
     return value ? language.t("omni.work.preview.openIn", { app: value }) : language.t("omni.work.preview.openDefault")
   })
 
+  // A reload (the agent may have rewritten the file) that finds the same bytes keeps the loaded
+  // value, so renderers do not remount and the reader keeps their place.
+  let last: WorkPreviewLoaded | undefined
   const [file] = createResource(
     () => ({ source: props.source, version: props.version, directory: sdk().directory }),
     (input) =>
@@ -57,10 +65,17 @@ export function WorkPreview(props: {
           sdk()
             .client.file.read({ path: relative })
             .then((result) => result.data!),
+      }).then((value) => {
+        if (last?.type === "bytes" && value.type === "bytes" && previewBytesEqual(last.bytes, value.bytes)) return last
+        last = value
+        return value
       }),
   )
-  // Gate on state so reading the resource never suspends an enclosing Suspense boundary.
-  const loaded = createMemo(() => (file.state === "ready" ? file() : undefined))
+  // Gate on state so reading the resource never suspends an enclosing Suspense boundary, and keep
+  // showing the current render while a reload is in flight.
+  const loaded = createMemo(() =>
+    file.state === "ready" || file.state === "refreshing" ? file.latest : undefined,
+  )
   const bytes = createMemo(() => {
     const value = loaded()
     return value?.type === "bytes" ? value.bytes : undefined
@@ -180,13 +195,17 @@ export function WorkPreview(props: {
               <OpenButton label={openLabel()} onOpen={props.onOpen} />
             </Notice>
           </Match>
-          <Match when={bytes()}>
+          {/* Keyed: new bytes remount the renderer, so every renderer (islands included) shows them. */}
+          <Match when={bytes()} keyed>
             {(value) => (
               <Switch>
                 <Match when={kind() === "image"}>
                   <div class="flex h-full items-center justify-center overflow-auto bg-v2-background-bg-deep p-4">
                     <img src={image()} alt={name()} class="max-h-full max-w-full object-contain" />
                   </div>
+                </Match>
+                <Match when={kind() === "markdown"}>
+                  <WorkPreviewMarkdown text={text()} source={props.source} />
                 </Match>
                 <Match when={kind() === "text"}>
                   <pre class="h-full overflow-auto whitespace-pre-wrap break-words p-4 text-12-regular text-v2-text-text-base font-mono">
@@ -206,7 +225,7 @@ export function WorkPreview(props: {
                       return PdfViewer
                     }}
                     props={{
-                      bytes: value(),
+                      bytes: value,
                       name: name(),
                       labels: {
                         ...labels(),
@@ -226,7 +245,7 @@ export function WorkPreview(props: {
                       return XlsxPreview
                     }}
                     props={{
-                      bytes: value(),
+                      bytes: value,
                       name: name(),
                       dark: theme.mode() === "dark",
                       labels: { ...labels(), sheets: language.t("omni.work.preview.sheets") },
@@ -242,7 +261,7 @@ export function WorkPreview(props: {
                       const { default: DocxPreview } = await import("@/components/extend/docx-viewer")
                       return DocxPreview
                     }}
-                    props={{ bytes: value() }}
+                    props={{ bytes: value }}
                   />
                 </Match>
                 <Match when={kind() === "pptx"}>
@@ -254,7 +273,7 @@ export function WorkPreview(props: {
                       const { default: PptxPreview } = await import("@/components/extend/pptx-viewer")
                       return PptxPreview
                     }}
-                    props={{ bytes: value(), labels: labels() }}
+                    props={{ bytes: value, labels: labels() }}
                   />
                 </Match>
               </Switch>
@@ -263,6 +282,31 @@ export function WorkPreview(props: {
         </Switch>
       </div>
     </section>
+  )
+}
+
+/**
+ * Markdown files render like chat messages (charts included). Relative images resolve against the
+ * file's own folder, as they would in any markdown viewer, through the chat's image resolver.
+ */
+function WorkPreviewMarkdown(props: { text: string; source: WorkPreviewSource }) {
+  const data = useData()
+  const resolve = (src: string) => data.resolveImage?.(previewImageSource(props.source, src)) ?? Promise.resolve(undefined)
+  return (
+    <DataProvider
+      data={data.store}
+      directory={data.directory}
+      sessionID={data.sessionID}
+      workMode={data.workMode}
+      onOpenFile={data.openFile}
+      onNavigateToSession={data.navigateToSession}
+      onSessionHref={data.sessionHref}
+      resolveImage={resolve}
+    >
+      <div class="h-full overflow-auto px-6 py-5">
+        <Markdown text={props.text} class="mx-auto max-w-[720px]" />
+      </div>
+    </DataProvider>
   )
 }
 

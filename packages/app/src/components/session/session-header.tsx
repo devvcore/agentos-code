@@ -170,7 +170,7 @@ export function SessionHeader(props: { work?: boolean }) {
   const isDesktop = createMediaQuery("(min-width: 768px)")
   const workPanel = useWorkPanel()
   const workOutputs = useWorkOutputs(() => (props.work ? params.id : undefined))
-  const workAttachments = useWorkAttachments(() => (props.work ? params.id : undefined))
+  const workAttachments = useWorkAttachments(() => (props.work ? params.id : undefined), workOutputs)
   // Work mode's Files entry point only appears once the session has a deliverable or an attachment.
   const files = createMemo(() => {
     const id = params.id

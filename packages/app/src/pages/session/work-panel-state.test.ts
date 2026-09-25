@@ -212,3 +212,37 @@ describe("workPanelReduce attachments", () => {
     expect(next.view).toBe("preview")
   })
 })
+
+describe("workPanelReduce switching files", () => {
+  const ref = { messageID: "msg_user", partID: "prt_file" }
+
+  test("opening another file while previewing switches to it", () => {
+    const state = run(WORK_PANEL_CLOSED, { type: "open", path: "/w/outputs/a.pdf" }, { type: "open", path: "/w/b.md" })
+    expect(state).toMatchObject({ view: "preview", path: "/w/b.md" })
+    expect(state.attachment).toBeUndefined()
+  })
+
+  test("an attachment replaces a file preview, and a file replaces an attachment", () => {
+    const attached = run(WORK_PANEL_CLOSED, { type: "open", path: "/w/outputs/a.pdf" }, { type: "attachment", ref })
+    expect(attached).toMatchObject({ view: "preview", attachment: ref })
+    expect(attached.path).toBeUndefined()
+    const back = run(attached, { type: "open", path: "/w/outputs/a.pdf" })
+    expect(back).toMatchObject({ view: "preview", path: "/w/outputs/a.pdf" })
+    expect(back.attachment).toBeUndefined()
+  })
+
+  test("one attachment replaces another", () => {
+    const other = { messageID: "msg_user", partID: "prt_other" }
+    expect(run(WORK_PANEL_CLOSED, { type: "attachment", ref }, { type: "attachment", ref: other }).attachment).toEqual(
+      other,
+    )
+  })
+
+  test("present_files switches an open preview to the presented file", () => {
+    const state = run(
+      { ...seeded(), view: "preview", path: "/w/outputs/a.pdf" },
+      { type: "present", presents: [{ id: "p1", paths: ["/w/outputs/b.xlsx"] }] },
+    )
+    expect(state).toMatchObject({ view: "preview", path: "/w/outputs/b.xlsx" })
+  })
+})

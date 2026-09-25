@@ -40,7 +40,9 @@ import { useSettings } from "@/context/settings"
 import { useSync } from "@/context/sync"
 import { errorMessage } from "@/pages/layout/helpers"
 import {
+  workAttachedOnly,
   workAttachments,
+  workFileVersion,
   workOutputs,
   workPresents,
   type WorkAttachment,
@@ -52,7 +54,7 @@ import {
   findFilePart,
   previewPath,
   workAttachmentPart,
-  workAttachmentSource,
+  workAttachmentResolve,
   workPreviewSourceEqual,
   type WorkPreviewSource,
 } from "@/pages/session/work-preview-source"
@@ -72,13 +74,16 @@ export function useWorkOutputs(sessionID: () => string | undefined) {
   })
 }
 
-/** Files the user attached in this session, newest first. Listed under "Attached" in Files. */
-export function useWorkAttachments(sessionID: () => string | undefined) {
+/**
+ * Files the user attached in this session, newest first, one row per file. Listed under
+ * "Attached" in Files, minus files already listed as deliverables.
+ */
+export function useWorkAttachments(sessionID: () => string | undefined, outputs: () => WorkOutput[]) {
   const sync = useSync()
   return createMemo(() => {
     const id = sessionID()
     if (!id) return []
-    return workAttachments({ messages: sync().data.message[id], parts: sync().data.part })
+    return workAttachedOnly(workAttachments({ messages: sync().data.message[id], parts: sync().data.part }), outputs())
   })
 }
 
@@ -105,7 +110,7 @@ export function WorkPanel(props: { sessionID: string }) {
     equals: (a, b) => a?.messageID === b?.messageID && a?.partID === b?.partID,
   })
   const outputs = useWorkOutputs(() => props.sessionID)
-  const attachments = useWorkAttachments(() => props.sessionID)
+  const attachments = useWorkAttachments(() => props.sessionID, outputs)
   const presents = createMemo(
     () => workPresents({ messages: sync().data.message[props.sessionID], parts: sync().data.part }),
     [],
@@ -120,10 +125,14 @@ export function WorkPanel(props: { sessionID: string }) {
     const ref = attachment()
     return ref ? workAttachmentPart(ref, sync().data.part) : undefined
   })
+  const held = createMemo(() => {
+    const ref = attachment()
+    return ref ? panel.localFile(ref) : undefined
+  })
   const [fetched] = createResource(
     () => {
       const ref = attachment()
-      if (!ref || synced() || !loaded()) return false
+      if (!ref || !ref.messageID || synced() || held() || !loaded()) return false
       return ref
     },
     (ref: WorkAttachmentRef) =>
@@ -138,11 +147,12 @@ export function WorkPanel(props: { sessionID: string }) {
       if (path) return { type: "path", path }
       const ref = attachment()
       if (!ref) return
-      const part = synced()
-      if (part) return workAttachmentSource(part)
-      const result = fetched.state === "ready" ? fetched() : undefined
-      if (!result || result.ref !== ref) return
-      return result.part ? workAttachmentSource(result.part) : { type: "missing" }
+      return workAttachmentResolve({
+        ref,
+        synced: synced(),
+        local: held(),
+        fetched: fetched.state === "ready" ? fetched() : undefined,
+      })
     },
     undefined,
     { equals: workPreviewSourceEqual },
@@ -201,12 +211,26 @@ export function WorkPanel(props: { sessionID: string }) {
     }, failed)
   }
 
+  // Reloads the preview when the agent may have rewritten the file (see workFileVersion).
+  const version = createMemo(() => {
+    const value = source()
+    if (value?.type !== "path") return
+    return workFileVersion({
+      directory: sdk().directory,
+      path: value.path,
+      messages: sync().data.message[props.sessionID],
+      parts: sync().data.part,
+    })
+  })
+
+  // Keyed on the source: opening another file (chat card, chip, Files row, present_files) remounts
+  // the preview, so no renderer or React island keeps showing the previous document.
   const preview = (value: WorkPreviewSource, back?: () => void) => {
     const path = previewPath(value)
     return (
       <WorkPreview
         source={value}
-        version={value.type === "path" ? outputs().find((item) => item.path === value.path)?.time : undefined}
+        version={version()}
         onOpen={canOpen() && path ? () => open(path) : undefined}
         onBack={back}
         onClose={() => panel.close(props.sessionID)}
@@ -229,8 +253,8 @@ export function WorkPanel(props: { sessionID: string }) {
         <Show when={previewOpen()}>
           <Portal>
             <div class="fixed inset-0 z-50 flex flex-col bg-v2-background-bg-base">
-              <Show when={source()} fallback={resolving()}>
-                {(value) => preview(value())}
+              <Show when={source()} fallback={resolving()} keyed>
+                {(value) => preview(value)}
               </Show>
             </div>
           </Portal>
@@ -253,8 +277,8 @@ export function WorkPanel(props: { sessionID: string }) {
         }}
       >
         <Show when={previewOpen()}>
-          <Show when={source()} fallback={resolving()}>
-            {(value) => preview(value(), () => panel.back(props.sessionID))}
+          <Show when={source()} fallback={resolving()} keyed>
+            {(value) => preview(value, () => panel.back(props.sessionID))}
           </Show>
         </Show>
         <Show when={view() === "files"}>

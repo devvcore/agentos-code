@@ -141,6 +141,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             activeCommentID={state.activeContextID}
             removeLabel={i18n.t("ui.promptInput.removeAttachment")}
             onAttachmentClick={props.controller.openAttachment}
+            canOpenAttachment={props.controller.canOpenAttachment}
             onAttachmentRemove={(attachment) => props.controller.removeAttachment(attachment.id)}
             onCommentClick={(comment) => props.controller.toggleContext(comment.key)}
             onCommentRemove={(comment) => props.controller.removeContext(comment.key)}
@@ -392,6 +393,8 @@ export function PromptInputV2Attachments(props: {
   activeCommentID?: string
   removeLabel: string
   onAttachmentClick?: (attachment: PromptInputV2Attachment) => void
+  /** Whether a non-image attachment card is clickable; without it only images open. */
+  canOpenAttachment?: (attachment: PromptInputV2Attachment) => boolean
   onAttachmentRemove: (attachment: PromptInputV2Attachment) => void
   onCommentClick?: (comment: PromptInputV2Comment) => void
   onCommentRemove?: (comment: PromptInputV2Comment) => void
@@ -439,7 +442,13 @@ export function PromptInputV2Attachments(props: {
                   <Show
                     when={attachment.mime.startsWith("image/")}
                     fallback={
-                      <AttachmentCardV2 title={attachment.filename}>
+                      <AttachmentCardV2
+                        title={attachment.filename}
+                        clickable={!!props.onAttachmentClick && !!props.canOpenAttachment?.(attachment)}
+                        onClick={() => {
+                          if (props.canOpenAttachment?.(attachment)) props.onAttachmentClick?.(attachment)
+                        }}
+                      >
                         {typeLabel(attachment.filename, attachment.mime, i18n.t("ui.common.file"))}
                       </AttachmentCardV2>
                     }

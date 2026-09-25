@@ -25,6 +25,9 @@ import { usePlatform } from "@/context/platform"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
 import { createSessionTabs } from "@/pages/session/helpers"
+import { useWorkPanel } from "@/pages/session/work-preview"
+import { workDraftRef } from "@/pages/session/work-preview-source"
+import { useLocal } from "@/context/local"
 import { showToast } from "@/utils/toast"
 import { createOmniLive } from "./omni-live"
 import { createOmniDictation } from "./omni-dictation"
@@ -137,6 +140,8 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
   const permission = usePermission()
   const language = useLanguage()
   const platform = usePlatform()
+  const local = useLocal()
+  const workPanel = useWorkPanel()
   const prompt = props.state ?? usePrompt()
   let editor: HTMLDivElement | undefined
 
@@ -394,8 +399,21 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     onContextRemove(item) {
       if (item?.commentID) comments.remove(item.path, item.commentID)
     },
-    openAttachment: (attachment) =>
-      dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />),
+    // Work mode previews a document that is not sent yet in the side panel, like a sent one;
+    // the image preview dialog cannot show a PDF or spreadsheet.
+    canOpenAttachment: () => local.agent.mode() === "work" && !!props.controls.session.id,
+    openAttachment: (attachment) => {
+      const sessionID = props.controls.session.id
+      if (local.agent.mode() === "work" && sessionID && !attachment.mime.startsWith("image/")) {
+        workPanel.openAttachment(sessionID, workDraftRef(attachment.id), {
+          url: attachment.blob.url,
+          mime: attachment.mime,
+          filename: attachment.sourcePath ?? attachment.filename,
+        })
+        return
+      }
+      dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />)
+    },
     openContext(key) {
       const item = controller.contextItem(key)
       if (item) openComment(item, props, sync, layout, files, comments)

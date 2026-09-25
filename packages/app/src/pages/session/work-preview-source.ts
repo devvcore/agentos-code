@@ -63,6 +63,8 @@ const mimeKinds: Record<string, PreviewKind> = {
   "image/webp": "image",
   "image/svg+xml": "image",
   "application/json": "text",
+  "text/markdown": "markdown",
+  "text/x-markdown": "markdown",
 }
 
 /**
@@ -97,6 +99,27 @@ export function previewDataURL(url: string): PreviewBytes | undefined {
   }
 }
 
+/**
+ * Bytes behind a blob: URL (a file still in the composer), honouring PREVIEW_MAX_BYTES. A revoked
+ * URL reports `unavailable`.
+ */
+export async function previewBlobURL(url: string, load: typeof fetch = fetch): Promise<WorkPreviewLoaded> {
+  const blob = await load(url)
+    .then((response) => (response.ok ? response.blob() : undefined))
+    .catch(() => undefined)
+  if (!blob) return { type: "unavailable" }
+  if (blob.size > PREVIEW_MAX_BYTES) return { type: "too-large", size: blob.size }
+  return { type: "bytes", bytes: new Uint8Array(await blob.arrayBuffer()) }
+}
+
+/**
+ * Reference for a file that is still in the composer: it has no message yet, so it only resolves
+ * from the in-memory copy the composer hands to `openAttachment`.
+ */
+export function workDraftRef(id: string): WorkAttachmentRef {
+  return { messageID: "", partID: id }
+}
+
 /** The file part a reference points at, from loaded sync data. */
 export function workAttachmentPart(ref: WorkAttachmentRef, parts: Record<string, Part[] | undefined>) {
   return findFilePart(ref, parts[ref.messageID])
@@ -128,6 +151,49 @@ export function workAttachmentSource(file: Pick<FilePart, "url" | "mime" | "file
   }
 }
 
+/**
+ * Resolve an attachment reference to what the preview shows. Sync data wins; until the part is
+ * there (a message still being sent) the in-memory copy from the click stands in, so the chip
+ * opens at once. A composer draft has nothing else to fall back on. Otherwise the fetched message
+ * decides, and undefined means "still resolving" (the panel shows a loading state, never nothing).
+ */
+export function workAttachmentResolve(input: {
+  ref: WorkAttachmentRef
+  synced?: Pick<FilePart, "url" | "mime" | "filename">
+  local?: Pick<FilePart, "url" | "mime" | "filename">
+  fetched?: { ref: WorkAttachmentRef; part?: Pick<FilePart, "url" | "mime" | "filename"> }
+}): WorkPreviewSource | undefined {
+  if (input.synced) return workAttachmentSource(input.synced)
+  if (input.local) return workAttachmentSource(input.local)
+  if (!input.ref.messageID) return { type: "missing" }
+  const result = input.fetched
+  if (!result || result.ref.messageID !== input.ref.messageID || result.ref.partID !== input.ref.partID) return
+  return result.part ? workAttachmentSource(result.part) : { type: "missing" }
+}
+
+/** Same bytes; a reload that finds the file unchanged keeps the current render. */
+export function previewBytesEqual(a: Uint8Array, b: Uint8Array) {
+  if (a === b) return true
+  if (a.byteLength !== b.byteLength) return false
+  for (let index = 0; index < a.byteLength; index++) if (a[index] !== b[index]) return false
+  return true
+}
+
+/**
+ * Where an image referenced from a previewed markdown file lives: relative sources resolve
+ * against the markdown file's folder. Remote, data:, and absolute sources pass through, as does
+ * everything when the file has no known location (the chat resolver then treats it as
+ * project-relative).
+ */
+export function previewImageSource(source: WorkPreviewSource, src: string) {
+  const value = src.trim()
+  const file = previewPath(source)
+  if (!file || !value || absolute(value) || /^[a-z][a-z0-9+.-]*:/i.test(value)) return src
+  const cut = Math.max(file.lastIndexOf("/"), file.lastIndexOf("\\"))
+  if (cut < 0) return src
+  return `${file.slice(0, cut)}/${value.replace(/^\.\//, "")}`
+}
+
 /** Display name for the preview header. */
 export function previewName(source: WorkPreviewSource) {
   if (source.type === "path") return getFilename(source.path)
@@ -154,11 +220,14 @@ export function previewSourceKind(source: WorkPreviewSource): PreviewKind {
  */
 export async function loadPreview(
   source: WorkPreviewSource,
-  input: { directory: string; read: WorkPreviewRead },
+  input: { directory: string; read: WorkPreviewRead; fetch?: typeof fetch },
 ): Promise<WorkPreviewLoaded> {
   if (source.type === "missing") return { type: "unavailable" }
   if (previewSourceKind(source) === "none") return { type: "unsupported" }
-  if (source.type === "inline") return previewDataURL(source.url) ?? { type: "unavailable" }
+  if (source.type === "inline") {
+    if (source.url.startsWith("blob:")) return previewBlobURL(source.url, input.fetch ?? fetch)
+    return previewDataURL(source.url) ?? { type: "unavailable" }
+  }
   const relative = previewRelative(input.directory, source.path)
   if (!relative) return { type: "outside" }
   return previewBytes(await input.read(relative))

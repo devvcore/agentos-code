@@ -21,7 +21,9 @@ describe("previewKind", () => {
     expect(previewKind("/w/outputs/data.tsv")).toBe("tsv")
     expect(previewKind("/w/outputs/chart.webp")).toBe("image")
     expect(previewKind("/w/outputs/logo.svg")).toBe("image")
-    expect(previewKind("/w/outputs/notes.md")).toBe("text")
+    expect(previewKind("/w/outputs/notes.md")).toBe("markdown")
+    expect(previewKind("/w/outputs/README.markdown")).toBe("markdown")
+    expect(previewKind("/w/outputs/notes.txt")).toBe("text")
   })
 
   test("falls back to none for unknown, legacy Office, and extensionless files", () => {

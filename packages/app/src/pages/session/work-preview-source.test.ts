@@ -4,15 +4,21 @@ import { PREVIEW_MAX_BYTES } from "./work-preview"
 import {
   findFilePart,
   loadPreview,
+  previewBlobURL,
+  previewBytesEqual,
   previewDataURL,
+  previewImageSource,
   previewKindFor,
   previewName,
   previewPath,
   workAttachmentPart,
+  workAttachmentResolve,
   workAttachmentSource,
   workAttachmentTarget,
+  workDraftRef,
   workPreviewSourceEqual,
   type WorkPreviewRead,
+  type WorkPreviewSource,
 } from "./work-preview-source"
 
 const dir = "/work/project"
@@ -187,3 +193,78 @@ describe("source helpers", () => {
     expect(workPreviewSourceEqual(undefined, undefined)).toBe(true)
   })
 })
+
+describe("markdown", () => {
+  test("markdown files render as markdown by extension or MIME type", () => {
+    expect(previewKindFor("notes.md", "text/plain")).toBe("markdown")
+    expect(previewKindFor("NOTES", "text/markdown")).toBe("markdown")
+    expect(previewKindFor("notes.txt", "text/plain")).toBe("text")
+  })
+
+  test("relative images resolve against the markdown file's folder", () => {
+    const source: WorkPreviewSource = { type: "path", path: `${dir}/outputs/report/summary.md` }
+    expect(previewImageSource(source, "chart.png")).toBe(`${dir}/outputs/report/chart.png`)
+    expect(previewImageSource(source, "./img/chart.png")).toBe(`${dir}/outputs/report/img/chart.png`)
+    expect(previewImageSource(source, "../chart.png")).toBe(`${dir}/outputs/report/../chart.png`)
+  })
+
+  test("absolute, remote, and data: images pass through, as does a file without a location", () => {
+    const source: WorkPreviewSource = { type: "path", path: `${dir}/outputs/summary.md` }
+    expect(previewImageSource(source, "/abs/chart.png")).toBe("/abs/chart.png")
+    expect(previewImageSource(source, "https://x.test/a.png")).toBe("https://x.test/a.png")
+    expect(previewImageSource(source, "data:image/png;base64,AA==")).toBe("data:image/png;base64,AA==")
+    const inline: WorkPreviewSource = { type: "inline", name: "a.md", mime: "text/plain", url: "data:," }
+    expect(previewImageSource(inline, "chart.png")).toBe("chart.png")
+  })
+})
+
+describe("reloads", () => {
+  test("previewBytesEqual compares content, not identity", () => {
+    expect(previewBytesEqual(new Uint8Array([1, 2]), new Uint8Array([1, 2]))).toBe(true)
+    expect(previewBytesEqual(new Uint8Array([1, 2]), new Uint8Array([1, 3]))).toBe(false)
+    expect(previewBytesEqual(new Uint8Array([1]), new Uint8Array([1, 2]))).toBe(false)
+  })
+})
+
+describe("attachments that are not synced yet", () => {
+  const ref = { messageID: "msg_user", partID: "prt_file" }
+
+  test("a just-sent attachment previews from the clicked copy until sync data has it", () => {
+    expect(workAttachmentResolve({ ref, local: file() })).toEqual(workAttachmentSource(file()))
+    const synced = file({ filename: "/Users/me/Downloads/Other.pdf" })
+    expect(workAttachmentResolve({ ref, synced, local: file() })).toEqual(workAttachmentSource(synced))
+  })
+
+  test("without a copy it waits for the fetched message instead of showing nothing", () => {
+    expect(workAttachmentResolve({ ref })).toBeUndefined()
+    expect(workAttachmentResolve({ ref, fetched: { ref: { ...ref, partID: "prt_other" } } })).toBeUndefined()
+    expect(workAttachmentResolve({ ref, fetched: { ref: { ...ref }, part: file() } })).toEqual(
+      workAttachmentSource(file()),
+    )
+    expect(workAttachmentResolve({ ref, fetched: { ref: { ...ref } } })).toEqual({ type: "missing" })
+  })
+
+  test("a composer draft resolves only from its copy", () => {
+    const draft = workDraftRef("att_1")
+    expect(workAttachmentResolve({ ref: draft })).toEqual({ type: "missing" })
+    expect(
+      workAttachmentResolve({ ref: draft, local: { url: "blob:x", mime: "application/pdf", filename: "/d/a.pdf" } }),
+    ).toEqual({ type: "inline", name: "a.pdf", mime: "application/pdf", url: "blob:x", path: "/d/a.pdf" })
+  })
+
+  test("blob: URLs from the composer load their bytes", async () => {
+    const load = (async () => new Response(new Blob([pdf]))) as unknown as typeof fetch
+    const loaded = await previewBlobURL("blob:x", load)
+    expect(loaded.type).toBe("bytes")
+    expect(decode(loaded as { type: string; bytes: Uint8Array })).toBe(pdf)
+    const gone = (async () => {
+      throw new TypeError("revoked")
+    }) as unknown as typeof fetch
+    expect(await previewBlobURL("blob:x", gone)).toEqual({ type: "unavailable" })
+    const source: WorkPreviewSource = { type: "inline", name: "a.pdf", mime: "application/pdf", url: "blob:x" }
+    const read = reader()
+    expect((await loadPreview(source, { directory: dir, read: read.read, fetch: load })).type).toBe("bytes")
+    expect(read.calls).toEqual([])
+  })
+})
+

@@ -64,6 +64,8 @@ export function createPromptInputV2Controller(input: {
   context: Accessor<PromptInputV2Suggestion[]>
   searchContextFiles: (query: string) => PromptInputV2Suggestion[] | Promise<PromptInputV2Suggestion[]>
   openAttachment?: (attachment: PromptInputV2Attachment) => void
+  /** Whether a non-image attachment card opens on click; images always open. */
+  canOpenAttachment?: (attachment: PromptInputV2Attachment) => boolean
   openContext?: (key: string) => void
   onContextRemove?: (item: PromptInputV2Comment) => void
   onEditor?: (element: HTMLElement) => void
@@ -325,6 +327,9 @@ export function createPromptInputV2Controller(input: {
     },
     openAttachment(attachment: PromptInputV2Attachment) {
       input.openAttachment?.(attachment)
+    },
+    canOpenAttachment(attachment: PromptInputV2Attachment) {
+      return !!input.openAttachment && (input.canOpenAttachment?.(attachment) ?? false)
     },
     removeAttachment(id: string) {
       draft.removeAttachment(id)
