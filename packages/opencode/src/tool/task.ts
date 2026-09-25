@@ -136,8 +136,14 @@ export const TaskTool = Tool.define(
       const session = params.task_id
         ? yield* sessions.get(SessionID.make(params.task_id)).pipe(Effect.catchCause(() => Effect.succeed(undefined)))
         : undefined
+      // Subagents of a work session act for it: carry over the work agent's folder allowances (OS temp dirs).
+      const work = (parent.parentID ? current.agent : ctx.agent) === "work" ? yield* agent.get("work") : undefined
       const childPermission = deriveSubagentSessionPermission({
-        parentSessionPermission: parent.permission ?? [],
+        parentSessionPermission: [
+          ...(parent.permission ?? []),
+          ...(work?.permission.filter((rule) => rule.permission === "external_directory" && rule.action === "allow") ??
+            []),
+        ],
         subagent: next,
       })
       const childToolDenies = [

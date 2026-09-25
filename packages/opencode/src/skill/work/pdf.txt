@@ -2,7 +2,7 @@
 
 A PDF is built for display, not for editing. Pull out what the user needs accurately, change files without harming the original, and when you produce a PDF, render it and look at it before you hand it over. Never overwrite the input. Write to a new file name.
 
-Nothing is bundled with this skill. Write the snippets below into a scratch directory (for example `.work/`), run them with `python3`, and clean up afterwards.
+Nothing is bundled with this skill. Write the snippets below into your scratch folder (`$OMNIWORK_SCRATCH`, outside the user's folder) and run them with `python3`.
 
 ## Setup and availability
 
@@ -20,7 +20,7 @@ For OCR you need `ocrmypdf`, or `tesseract` plus `pytesseract`. If neither is in
 | Task | Approach |
 |---|---|
 | Triage an unknown PDF | Triage script below: pages, encryption, text layer per page, form fields |
-| Read text | `pdfplumber` (`extract_text(layout=True)` keeps columns), `pdftotext -layout`, or `markitdown` |
+| Read text | The read tool first. For bulk or programmatic extraction: `pdfplumber` (`extract_text(layout=True)` keeps columns), `pdftotext -layout`, or `markitdown` |
 | Extract tables | `pdfplumber` `page.extract_tables()` into pandas; check the numbers against the rendered page |
 | Scanned PDF (no text layer) | `ocrmypdf --skip-text in.pdf out.pdf`, else render the pages and run `pytesseract`, else tell the user OCR is not available |
 | Merge, split, reorder, rotate | `pypdf` `PdfWriter` |
@@ -34,7 +34,7 @@ For OCR you need `ocrmypdf`, or `tesseract` plus `pytesseract`. If neither is in
 ## Triage first
 
 ```python
-# .work/triage_pdf.py <file.pdf>
+# $OMNIWORK_SCRATCH/triage_pdf.py <file.pdf>
 import sys, json
 from pypdf import PdfReader
 r = PdfReader(sys.argv[1])
@@ -59,13 +59,13 @@ Pages listed in `scanned_pages` have no text layer, so they need OCR. `form_fiel
 ## Reading text and tables
 
 ```python
-import pdfplumber, pandas as pd
+import os, pdfplumber, pandas as pd
 with pdfplumber.open("in.pdf") as pdf:
     for n, page in enumerate(pdf.pages, 1):
         text = page.extract_text(layout=True) or ""
         for t_i, table in enumerate(page.extract_tables()):
             df = pd.DataFrame(table[1:], columns=table[0])
-            df.to_csv(f".work/p{n}_t{t_i}.csv", index=False)
+            df.to_csv(os.path.join(os.environ["OMNIWORK_SCRATCH"], f"p{n}_t{t_i}.csv"), index=False)
 ```
 
 - Tables without ruling lines often extract badly. Try `page.extract_tables({"vertical_strategy": "text", "horizontal_strategy": "text"})`, or crop first with `page.within_bbox((x0, top, x1, bottom))`.
@@ -75,7 +75,7 @@ with pdfplumber.open("in.pdf") as pdf:
 ## OCR for scans
 
 ```bash
-ocrmypdf --skip-text --deskew --output-type pdf in.pdf .work/in_ocr.pdf     # adds a text layer and keeps the page images
+ocrmypdf --skip-text --deskew --output-type pdf in.pdf "$OMNIWORK_SCRATCH/in_ocr.pdf"     # adds a text layer and keeps the page images
 ```
 
 Without ocrmypdf, when `tesseract` and `pytesseract` are installed:
@@ -228,7 +228,7 @@ pdfplumber measures `top` from the top of the page, while reportlab measures `y`
 ### 1. Reopen and check the output
 
 ```python
-# .work/check_pdf.py <out.pdf> [expected_pages] [expected text ...]
+# $OMNIWORK_SCRATCH/check_pdf.py <out.pdf> [expected_pages] [expected text ...]
 import sys, json
 from pypdf import PdfReader
 path, expect_pages, needles = sys.argv[1], (int(sys.argv[2]) if len(sys.argv) > 2 else None), sys.argv[3:]
@@ -249,10 +249,10 @@ Pass the values you wrote (names, dates, headings) as `expected text`. `missing_
 ### 2. Render and look
 
 ```bash
-mkdir -p .work/render && pdftoppm -png -r 70 out.pdf .work/render/page
+mkdir -p "$OMNIWORK_SCRATCH/render" && pdftoppm -png -r 70 out.pdf "$OMNIWORK_SCRATCH/render/page"
 ```
 
-Without poppler, use PyMuPDF: `import fitz; [p.get_pixmap(dpi=70).save(f".work/render/page-{p.number + 1}.png") for p in fitz.open("out.pdf")]`. On macOS only, `qlmanage -t -s 1200 -o .work/render out.pdf` renders the first page. Look at every page you changed or created: filled values sitting inside their boxes, watermark placement, rotation, table layout, fonts (no black boxes), and no blank pages. If nothing can render the file, tell the user that the visual check was not done.
+Without poppler, use PyMuPDF: `import os, fitz; [p.get_pixmap(dpi=70).save(os.path.join(os.environ["OMNIWORK_SCRATCH"], "render", f"page-{p.number + 1}.png")) for p in fitz.open("out.pdf")]`. On macOS only, `qlmanage -t -s 1200 -o "$OMNIWORK_SCRATCH/render" out.pdf` renders the first page. Look at every page you changed or created: filled values sitting inside their boxes, watermark placement, rotation, table layout, fonts (no black boxes), and no blank pages. If nothing can render the file, tell the user that the visual check was not done.
 
 ### 3. Report to the user
 

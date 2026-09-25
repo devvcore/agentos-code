@@ -35,6 +35,20 @@ The coding agent runs independently while GPT Live continues talking; ending a
 call stops its audio and usage, not the coding run. Credentials stay in a private
 CLI bridge process, and the renderer receives only call lifecycle results.
 
+## Omniwork Python
+
+Work mode runs document and data scripts on a managed Python rather than the
+Mac's `python3`. The app bundles a pinned `uv` (checksum-verified by
+`build:agentos`); when the runtime starts, it installs a standalone CPython and a
+virtual environment with pandas, openpyxl, pypdf, python-docx, python-pptx,
+matplotlib, markitdown, and the other pinned libraries into
+`~/.local/share/agentos-code/work-runtime/` in the background. The first install
+downloads about 100 MB from PyPI and python-build-standalone. Work shells get the
+environment first on `PATH` once it is ready; until then the agent is told the
+tools are still installing. Changing the pinned set in
+`packages/opencode/src/work/python.ts` changes its stamp and installs a fresh
+environment. Progress and errors go to `work-runtime/install.log`.
+
 ## Build on Apple Silicon macOS
 
 From this package, with Bun 1.3.14 installed:

@@ -23,6 +23,7 @@ const config: Configuration = {
   extraResources: [
     { from: "resources/omnicode-notices.txt", to: "omnicode-notices.txt" },
     { from: "resources/agentos-code", to: "agentos-code" },
+    { from: "resources/uv", to: "uv" },
     { from: "resources/icons", to: "icons" },
   ],
   protocols: { name: "OmniCode", schemes: ["agentos-code"] },

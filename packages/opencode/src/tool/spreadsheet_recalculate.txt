@@ -1,0 +1,9 @@
+Recalculate every formula in an Excel workbook (.xlsx, .xlsm) and save the results into the file as cached values.
+
+openpyxl and most scripts save formulas without values, so Numbers, Quick Look, email and chat previews, Google Drive previews, and `openpyxl.load_workbook(data_only=True)` see blank cells. This tool fixes that in place and reports what it found. Formulas, styles, charts, defined names, and every other part of the file are left as they were; Excel still recalculates on open.
+
+Usage:
+- Call it on every workbook you deliver, after your last write to the file and before you present it. Run it again after each fix.
+- Returns JSON: `status` ("ok" or "errors"), `formulas` (count), `errors` (cells whose formula evaluates to #DIV/0!, #REF!, #VALUE!, #N/A, #NAME?, #NUM!, and so on, with the formula), and `unsupported` (cells calling a function the engine cannot evaluate or that needs live data; those cells are left without a new value).
+- Fix every error it reports, unless the error is intended and explained in the workbook.
+- An `unsupported` function name may be a typo (Excel would show #NAME?) or a function the engine lacks. Check the spelling; if it is real, prefer an older equivalent (INDEX/MATCH, SUMIFS, SUMPRODUCT) or tell the user those cells are calculated only when opened in Excel.

@@ -19,8 +19,11 @@ import { Permission } from "@/permission"
 import { mergeDeep, pipe, sortBy, values } from "remeda"
 import { Global } from "@opencode-ai/core/global"
 import path from "path"
+import os from "os"
+import fs from "fs/promises"
 import { Plugin } from "@/plugin"
 import { Skill } from "../skill"
+import { Scratch } from "../session/scratch"
 import { Effect, Context, Layer, Schema } from "effect"
 import { InstanceState } from "@/effect/instance-state"
 import * as Option from "effect/Option"
@@ -109,6 +112,8 @@ const layer = Layer.effect(
         const whitelistedDirs = [
           Truncate.GLOB,
           path.join(Global.Path.tmp, "*"),
+          // Per-session Omniwork scratch folders are harness-owned; subagents of a work session use them too.
+          path.join(Scratch.root, "*"),
           ...skillDirs.map((dir) => path.join(dir, "*")),
           ...referenceDirs.map((dir) => path.join(dir, "*")),
         ]
@@ -116,6 +121,12 @@ const layer = Layer.effect(
           "*": "ask",
           ...Object.fromEntries(whitelistedDirs.map((dir) => [dir, "allow"])),
         } satisfies Record<string, "allow" | "ask" | "deny">
+
+        // OS temp dirs, raw and resolved (macOS: /tmp -> /private/tmp, $TMPDIR -> /private/var/folders/...).
+        const tmpDirs = process.platform === "win32" ? [os.tmpdir()] : [os.tmpdir(), "/tmp", "/private/tmp"]
+        const scratchDirs = yield* Effect.promise(() =>
+          Promise.all(tmpDirs.map((dir) => fs.realpath(dir).catch(() => dir))),
+        ).pipe(Effect.map((real) => Array.from(new Set([...tmpDirs, ...real]))))
 
         const defaults = Permission.fromConfig({
           "*": "allow",
@@ -190,6 +201,8 @@ const layer = Layer.effect(
               defaults,
               Permission.fromConfig({
                 question: "allow",
+                // Scripts commonly write scratch output to the OS temp dir; don't interrupt knowledge work for it.
+                external_directory: Object.fromEntries(scratchDirs.map((dir) => [path.join(dir, "*"), "allow"])),
                 // Files open in the in-app viewer via present_files; launching desktop apps needs approval.
                 bash: {
                   open: "ask",

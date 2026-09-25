@@ -55,6 +55,8 @@ import { eq } from "drizzle-orm"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionReminders } from "./reminders"
 import { SessionTools } from "./tools"
+import { Scratch } from "./scratch"
+import { WorkPython } from "@/work/python"
 import { LLMEvent } from "@opencode-ai/llm"
 
 // @ts-ignore
@@ -1222,6 +1224,14 @@ const layer = Layer.effect(
             const lastUserMsg = msgs.findLast((m) => m.info.role === "user")
             const bypassAgentCheck = lastUserMsg?.parts.some((p) => p.type === "agent") ?? false
             const promptOps = yield* ops()
+            // Omniwork runs in arbitrary user folders. Subagents of a work session act for it, so the whole session
+            // tree gets folder-scoped instructions and one scratch folder outside the user's folder.
+            const owner = yield* Scratch.owner(session, agent.name).pipe(
+              Effect.provideService(Session.Service, sessions),
+              Effect.orDie,
+            )
+            const work = owner.agent === "work"
+            const scratch = work ? yield* Effect.promise(() => Scratch.ensure(owner.sessionID)) : undefined
 
             const tools = yield* SessionTools.resolve({
               agent,
@@ -1231,6 +1241,7 @@ const layer = Layer.effect(
               bypassAgentCheck,
               messages: msgs,
               promptOps,
+              scratch,
             }).pipe(
               Effect.provideService(Plugin.Service, plugin),
               Effect.provideService(Permission.Service, permission),
@@ -1256,13 +1267,17 @@ const layer = Layer.effect(
 
             const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
               sys.skills(agent),
-              sys.environment(model),
-              instruction.system().pipe(Effect.orDie),
+              sys.environment(model, { scratch }),
+              // Don't inherit coding instructions from ancestors or ~/.claude in Omniwork session trees.
+              instruction.system({ scope: work ? "folder" : "project" }).pipe(Effect.orDie),
               sys.mcp(agent, session.permission),
               MessageV2.toModelMessagesEffect(msgs, model),
             ])
+            // The managed Python the work shell uses (or its install status); the first Work prompt starts provisioning.
+            const python = work ? yield* Effect.promise(() => WorkPython.prompt()) : undefined
             const system = [
               ...env,
+              ...(python ? [python] : []),
               ...instructions,
               ...(mcpInstructions ? [mcpInstructions] : []),
               ...(skills ? [skills] : []),

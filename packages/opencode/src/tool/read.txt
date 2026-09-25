@@ -12,3 +12,4 @@ Usage:
 - Call this tool in parallel when you know there are multiple files you want to read.
 - Avoid tiny repeated slices (30 line chunks). If you need more context, read a larger window.
 - This tool can read image files and PDFs and return them as file attachments.
+- Office documents (.xlsx/.xlsm, .docx, .pptx) are rendered as text: spreadsheets as a workbook overview plus one table per sheet (cell values, formulas as `=FORMULA → value`, ISO dates), Word documents as markdown with headings, lists, tables, tracked changes, and comments, and presentations slide by slide with speaker notes. offset/limit page through the rendered lines; the workbook overview lists the line where each sheet starts.

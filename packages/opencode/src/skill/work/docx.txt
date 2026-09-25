@@ -2,7 +2,7 @@
 
 A good Word deliverable uses the document's own styles, has real headings (so the navigation pane and table of contents work), contains no leftover placeholders, and looks right when rendered. When you edit someone else's document, change only what was asked and leave the rest of it exactly as it was.
 
-Nothing is bundled with this skill. Write the snippets below into a scratch directory (for example `.work/`), run them with `python3`, and clean up afterwards.
+Nothing is bundled with this skill. Write the snippets below into your scratch folder (`$OMNIWORK_SCRATCH`, outside the user's folder) and run them with `python3`.
 
 ## Setup and availability
 
@@ -19,7 +19,7 @@ If a tool is missing, use the next option down. When nothing can render the docu
 
 | Task | Approach |
 |---|---|
-| Read or summarize a .docx | `pandoc in.docx -t markdown` (add `--track-changes=all` to see revisions), else `markitdown`, else the python-docx dump below |
+| Read or summarize a .docx | The read tool: text, headings, tables, tracked changes, and comments, no Python needed |
 | New document from scratch | python-docx, built-in styles (`Title`, `Heading 1-3`, `List Bullet`, `List Number`, `Table Grid`) |
 | New document that must match a brand or template | `Document("template.docx")`, remove the sample body content, then write with the template's style names |
 | Fill a template with `{{placeholders}}` | Cross-run replace (below) across body, tables, headers, and footers |
@@ -31,23 +31,7 @@ If a tool is missing, use the next option down. When nothing can render the docu
 
 ## Reading
 
-```python
-# .work/dump_docx.py <file.docx>: structure with style names, so you can see how the doc is built
-import sys, docx
-d = docx.Document(sys.argv[1])
-for i, p in enumerate(d.paragraphs):
-    if p.text.strip():
-        print(f"{i:4} [{p.style.name}] {p.text[:120]}")
-for t_i, t in enumerate(d.tables):
-    print(f"-- table {t_i}: {len(t.rows)}x{len(t.columns)} style={t.style.name if t.style else None}")
-    for r in t.rows[:4]:
-        print("   ", [c.text[:25] for c in r.cells])
-for s_i, s in enumerate(d.sections):
-    print(f"-- section {s_i}: header={[p.text for p in s.header.paragraphs if p.text]} footer={[p.text for p in s.footer.paragraphs if p.text]}")
-print("paragraph styles:", sorted({s.name for s in d.styles if s.type == 1})[:40])
-```
-
-`d.paragraphs` skips text inside tables, text boxes, and content controls. If the text you see is missing something, fall back to `pandoc` or grep `word/document.xml` directly (`unzip -p f.docx word/document.xml`).
+Look at a document with the read tool first. It shows the text with headings, tables, tracked changes, and comments. Use Python only when you need what it does not show, such as the style names to reuse when editing (`[s.name for s in docx.Document(path).styles]`), or the raw XML (`unzip -p f.docx word/document.xml`) for text boxes and content controls.
 
 ## Creating with python-docx
 
@@ -151,7 +135,7 @@ doc.save("filled.docx")
 Use tracked changes when the user wants to review edits, and always for contracts and anything legal. python-docx cannot create revisions, so edit `word/document.xml` directly. A deletion is `<w:del>` wrapping a run whose text is in `<w:delText>`. An insertion is `<w:ins>` wrapping a normal run. Both need a unique `w:id`, a `w:author`, and a `w:date`. Split the original run so that only the changed words go into the revision, and copy its `w:rPr` into every piece.
 
 ```python
-# .work/redline.py: tracked replacement of exact phrases, keeping everything else byte-for-byte
+# $OMNIWORK_SCRATCH/redline.py: tracked replacement of exact phrases, keeping everything else byte-for-byte
 import copy, zipfile, datetime
 from lxml import etree
 
@@ -250,7 +234,7 @@ On older python-docx, either upgrade it or add the comments in OOXML. That needs
 ### 1. Structural check
 
 ```python
-# .work/check_docx.py <out.docx>
+# $OMNIWORK_SCRATCH/check_docx.py <out.docx>
 import sys, re, json, zipfile, docx
 path = sys.argv[1]
 d = docx.Document(path)                                    # raises if the package is corrupt
@@ -272,12 +256,12 @@ print(json.dumps(report, indent=2))
 ### 2. Visual check (render and look)
 
 ```bash
-mkdir -p .work/render
-soffice --headless --convert-to pdf --outdir .work/render out.docx          # or the full path to LibreOffice's soffice on macOS
-pdftoppm -png -r 80 .work/render/out.pdf .work/render/page                  # or PyMuPDF: page.get_pixmap(dpi=80).save(...)
+mkdir -p "$OMNIWORK_SCRATCH/render"
+soffice --headless --convert-to pdf --outdir "$OMNIWORK_SCRATCH/render" out.docx          # or the full path to LibreOffice's soffice on macOS
+pdftoppm -png -r 80 "$OMNIWORK_SCRATCH/render/out.pdf" "$OMNIWORK_SCRATCH/render/page"                  # or PyMuPDF: page.get_pixmap(dpi=80).save(...)
 ```
 
-Look at the page images: headings, tables that don't run off the page, images, headers and footers, page breaks where intended, no blank pages. Rendering is done by LibreOffice, so small font or spacing differences from Word are normal. Broken layout is not. If LibreOffice is not installed, macOS can make a first-page preview with `qlmanage -t -s 1200 -o .work/render out.docx`. Otherwise tell the user that you checked the document's structure but could not render it.
+Look at the page images: headings, tables that don't run off the page, images, headers and footers, page breaks where intended, no blank pages. Rendering is done by LibreOffice, so small font or spacing differences from Word are normal. Broken layout is not. If LibreOffice is not installed, macOS can make a first-page preview with `qlmanage -t -s 1200 -o "$OMNIWORK_SCRATCH/render" out.docx`. Otherwise tell the user that you checked the document's structure but could not render it.
 
 ### 3. Report to the user
 

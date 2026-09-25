@@ -262,3 +262,51 @@ describe("Instruction.systemPaths global config", () => {
     }),
   )
 })
+
+describe("Instruction.systemPaths folder scope", () => {
+  it.live("uses only the working folder's own instructions, not ancestors", () =>
+    Effect.gen(function* () {
+      const configTmp = yield* tmpWithFiles({ "AGENTS.md": "# OmniCode Global" })
+      const root = yield* tmpWithFiles({
+        "AGENTS.md": "# Ancestor Coding Rules",
+        "runs/work/AGENTS.md": "# Folder Rules",
+      })
+      const folder = path.join(root, "runs", "work")
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        expect(Array.from(yield* svc.systemPaths({ scope: "folder" }))).toEqual([
+          path.join(configTmp, "AGENTS.md"),
+          path.join(folder, "AGENTS.md"),
+        ])
+        expect(yield* svc.system({ scope: "folder" })).toEqual([
+          `Instructions from: ${path.join(configTmp, "AGENTS.md")}\n# OmniCode Global`,
+          `Instructions from: ${path.join(folder, "AGENTS.md")}\n# Folder Rules`,
+        ])
+
+        // Default (build/plan) behavior is unchanged: non-git folders walk up through ancestors.
+        const project = yield* svc.systemPaths()
+        expect(project.has(path.join(folder, "AGENTS.md"))).toBe(true)
+        expect(project.has(path.join(root, "AGENTS.md"))).toBe(true)
+      }).pipe(provideInstance(folder), provideInstruction({ home: configTmp, config: configTmp }))
+    }),
+  )
+
+  it.live("skips ancestor files and the ~/.claude/CLAUDE.md fallback", () =>
+    Effect.gen(function* () {
+      const homeTmp = yield* tmpWithFiles({ ".claude/CLAUDE.md": "# Claude Code Rules" })
+      const configTmp = yield* tmpdirScoped()
+      const root = yield* tmpWithFiles({ "AGENTS.md": "# Ancestor Coding Rules", "work/data.csv": "a,b\n" })
+      const folder = path.join(root, "work")
+
+      yield* Effect.gen(function* () {
+        const svc = yield* Instruction.Service
+        expect(Array.from(yield* svc.systemPaths({ scope: "folder" }))).toEqual([])
+
+        const project = yield* svc.systemPaths({ scope: "project" })
+        expect(project.has(path.join(homeTmp, ".claude", "CLAUDE.md"))).toBe(true)
+        expect(project.has(path.join(root, "AGENTS.md"))).toBe(true)
+      }).pipe(provideInstance(folder), provideInstruction({ home: homeTmp, config: configTmp }))
+    }),
+  )
+})

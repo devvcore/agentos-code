@@ -94,6 +94,20 @@ describe("tool.present_files", () => {
     }),
   )
 
+  it.instance("recovers a mistyped absolute path by file name without asking for outside access", () =>
+    Effect.gen(function* () {
+      const test = yield* TestInstance
+      yield* put(path.join(test.directory, "Site Report [Sep].xlsx"), "xlsx")
+      const tool = yield* init()
+      const { items, next } = asks()
+      const result = yield* tool.execute({ paths: ["/Users/someone/garbled-dir/Site Report [Sep].xlsx"] }, next)
+      expect(result.metadata.files).toEqual([
+        { path: path.join(test.directory, "Site Report [Sep].xlsx"), name: "Site Report [Sep].xlsx" },
+      ])
+      expect(items.map((item) => item.permission)).toEqual(["present_files"])
+    }),
+  )
+
   it.instance("asks for external_directory permission for files outside the project", () =>
     Effect.gen(function* () {
       const outer = yield* tmpdirScoped()

@@ -8,6 +8,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { expect } from "bun:test"
 import { Cause, Deferred, Duration, Effect, Exit, Fiber, Layer } from "effect"
 import path from "path"
+import fs from "fs/promises"
 import { fileURLToPath } from "url"
 import { NamedError } from "@opencode-ai/core/util/error"
 import { Agent as AgentSvc } from "../../src/agent/agent"
@@ -43,6 +44,7 @@ import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { Skill } from "../../src/skill"
 import { SystemPrompt } from "../../src/session/system"
+import { Scratch } from "../../src/session/scratch"
 import { Shell } from "@opencode-ai/core/shell"
 import { Snapshot } from "../../src/snapshot"
 import { ToolRegistry } from "@/tool/registry"
@@ -2465,6 +2467,50 @@ noLLMServer.instance(
           expect(err.data.message).toContain("init")
         }
       }
+    }),
+  30_000,
+)
+
+it.instance(
+  "work session trees get a scratch folder and folder-scoped instructions, including subagents",
+  () =>
+    Effect.gen(function* () {
+      const { llm } = yield* useServerConfig(providerCfg)
+      const prompt = yield* SessionPrompt.Service
+      const sessions = yield* Session.Service
+      // A coding-instruction file that project scope loads and folder scope must skip.
+      const claude = path.join(process.env.OPENCODE_TEST_HOME!, ".claude", "CLAUDE.md")
+      yield* Effect.acquireRelease(
+        Effect.promise(() => Bun.write(claude, "# Claude Code Coding Rules")),
+        () => Effect.promise(() => fs.rm(claude, { force: true })),
+      )
+
+      const system = Effect.fn("test.system")(function* (sessionID: SessionID, agent: string, calls: number) {
+        yield* prompt.prompt({ sessionID, agent, noReply: true, parts: [{ type: "text", text: "hello" }] })
+        yield* llm.hang
+        const fiber = yield* prompt.loop({ sessionID }).pipe(Effect.forkChild)
+        yield* awaitWithTimeout(llm.wait(calls), "timed out waiting for LLM request", "10 seconds")
+        yield* Fiber.interrupt(fiber)
+        return JSON.stringify((yield* llm.hits)[calls - 1]?.body)
+      })
+
+      const work = yield* sessions.create({ title: "Work" })
+      const scratch = path.join(Scratch.root, work.id)
+      const workBody = yield* system(work.id, "work", 1)
+      expect(workBody).toContain(`Scratch folder: ${scratch}`)
+      expect(workBody).not.toContain("Claude Code Coding Rules")
+      expect((yield* Effect.promise(() => fs.stat(scratch))).isDirectory()).toBe(true)
+
+      // A subagent of the work session shares its root's scratch folder and instruction scope.
+      const child = yield* sessions.create({ title: "Child", parentID: work.id, agent: "general" })
+      const childBody = yield* system(child.id, "general", 2)
+      expect(childBody).toContain(`Scratch folder: ${scratch}`)
+      expect(childBody).not.toContain("Claude Code Coding Rules")
+
+      const build = yield* sessions.create({ title: "Build" })
+      const buildBody = yield* system(build.id, "build", 3)
+      expect(buildBody).not.toContain("Scratch folder:")
+      expect(buildBody).toContain("Claude Code Coding Rules")
     }),
   30_000,
 )

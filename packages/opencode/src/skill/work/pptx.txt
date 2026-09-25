@@ -2,7 +2,7 @@
 
 A good deck makes one point per slide, the slide title states that point, and the evidence is real (native charts and tables, not decoration). If the user supplies a template or an existing deck, its layouts, fonts, and colors are the design system. Use them and don't invent your own.
 
-Nothing is bundled with this skill. Write the snippets below into a scratch directory (for example `.work/`), run them with `python3`, and clean up afterwards.
+Nothing is bundled with this skill. Write the snippets below into your scratch folder (`$OMNIWORK_SCRATCH`, outside the user's folder) and run them with `python3`.
 
 ## Setup and availability
 
@@ -19,7 +19,7 @@ If a tool is missing, use the next option down, and tell the user which checks y
 
 | Task | Approach |
 |---|---|
-| Read or summarize a deck | `markitdown deck.pptx` if available, else the inspect script below (slide text plus notes) |
+| Read or summarize a deck | The read tool: text and speaker notes for every slide, no Python needed |
 | New deck, no template | Outline first, then python-pptx with the default layouts, set to 16:9 |
 | New deck on the user's template | `Presentation("template.pptx")`, inspect the layouts, delete the sample slides, and add slides from the template's layouts |
 | Edit an existing deck | Structural changes first (add, delete, reorder, duplicate), then content edits in the placeholders that already exist |
@@ -33,8 +33,10 @@ Write the outline as a list of **action titles**, one sentence per slide that st
 
 ## Inspect a template or an existing deck
 
+To read what a deck says, use the read tool. To build on a template or edit a deck's structure, you also need its layouts and placeholder indexes, which only this script shows:
+
 ```python
-# .work/inspect_pptx.py <deck.pptx>
+# $OMNIWORK_SCRATCH/inspect_pptx.py <deck.pptx>
 import sys
 from pptx import Presentation
 from pptx.util import Emu
@@ -181,7 +183,7 @@ for ph in list(slide.placeholders):
 ### 1. Text and structure check
 
 ```python
-# .work/check_pptx.py <deck.pptx>
+# $OMNIWORK_SCRATCH/check_pptx.py <deck.pptx>
 import sys, re, json
 from pptx import Presentation
 from pptx.util import Emu
@@ -217,12 +219,12 @@ print(json.dumps(report, indent=2))
 ### 2. Render every slide and look at it
 
 ```bash
-mkdir -p .work/render
-soffice --headless --convert-to pdf --outdir .work/render deck.pptx        # or the full path to LibreOffice's soffice on macOS
-pdftoppm -png -r 60 .work/render/deck.pdf .work/render/slide               # or PyMuPDF: page.get_pixmap(dpi=60).save(...)
+mkdir -p "$OMNIWORK_SCRATCH/render"
+soffice --headless --convert-to pdf --outdir "$OMNIWORK_SCRATCH/render" deck.pptx        # or the full path to LibreOffice's soffice on macOS
+pdftoppm -png -r 60 "$OMNIWORK_SCRATCH/render/deck.pdf" "$OMNIWORK_SCRATCH/render/slide"               # or PyMuPDF: page.get_pixmap(dpi=60).save(...)
 ```
 
-Open every slide image and check for text overflow or clipping, overlapping shapes, readable chart labels, consistent title positions, and no leftover template content. Fix what you find and render again. LibreOffice's rendering is close to PowerPoint's but not identical (fonts may substitute). If LibreOffice is not installed, macOS can make a preview of the first slide with `qlmanage -t -s 1200 -o .work/render deck.pptx`. Otherwise tell the user that you did not check the slides visually.
+Open every slide image and check for text overflow or clipping, overlapping shapes, readable chart labels, consistent title positions, and no leftover template content. Fix what you find and render again. LibreOffice's rendering is close to PowerPoint's but not identical (fonts may substitute). If LibreOffice is not installed, macOS can make a preview of the first slide with `qlmanage -t -s 1200 -o "$OMNIWORK_SCRATCH/render" deck.pptx`. Otherwise tell the user that you did not check the slides visually.
 
 ### 3. Report to the user
 

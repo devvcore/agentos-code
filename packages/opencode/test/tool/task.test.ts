@@ -4,6 +4,9 @@ import { Database } from "@opencode-ai/core/database/database"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { Cause, Deferred, Effect, Exit, Fiber, Layer } from "effect"
+import os from "os"
+import path from "path"
+import { Permission } from "@/permission"
 import { Agent } from "../../src/agent/agent"
 import { BackgroundJob } from "@/background/job"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -501,6 +504,36 @@ describe("tool.task", () => {
       expect(result.metadata.sessionId).not.toBe("ses_missing")
       expect(result.output).toContain(`<task id="${result.metadata.sessionId}" state="completed">`)
       expect(seen?.sessionID).toBe(result.metadata.sessionId)
+    }),
+  )
+
+  it.instance("subagents of a work session inherit the work agent's temp-dir access", () =>
+    Effect.gen(function* () {
+      const sessions = yield* Session.Service
+      const { chat, assistant } = yield* seed()
+      const tool = yield* TaskTool
+      const def = yield* tool.init()
+      const run = (agent: string) =>
+        def.execute(
+          { description: "inspect data", prompt: "look at the csv", subagent_type: "general" },
+          {
+            sessionID: chat.id,
+            messageID: assistant.id,
+            agent,
+            abort: new AbortController().signal,
+            extra: { promptOps: stubOps() },
+            messages: [],
+            metadata: () => Effect.void,
+            ask: () => Effect.void,
+          },
+        )
+      const tmp = path.join(os.tmpdir(), "report", "*")
+
+      const fromWork = yield* sessions.get((yield* run("work")).metadata.sessionId)
+      expect(Permission.evaluate("external_directory", tmp, fromWork.permission ?? []).action).toBe("allow")
+
+      const fromBuild = yield* sessions.get((yield* run("build")).metadata.sessionId)
+      expect(Permission.evaluate("external_directory", tmp, fromBuild.permission ?? []).action).not.toBe("allow")
     }),
   )
 

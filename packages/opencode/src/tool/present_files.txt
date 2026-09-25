@@ -1,6 +1,6 @@
 Show files to the user inside the app's file viewer (PDF, Excel, Word, PowerPoint, CSV, images, text). Use this whenever the user asks to open, show, view, or see a file, and after you create a deliverable. Never use shell commands like `open`, `xdg-open`, or `start` to open files.
 
 Usage:
-- Pass 1 to 10 paths, absolute or relative to the project directory.
+- Pass 1 to 10 paths. Prefer paths relative to the working directory (for example `outputs/Summary.xlsx`); they are shorter and harder to mistype than absolute paths.
 - Files are shown where they are; do not copy them first.
 - The file contents are not returned to you. Use the read tool if you need to inspect a file.

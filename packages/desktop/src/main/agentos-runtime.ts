@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process"
 import { promisify } from "node:util"
 import { createInterface } from "node:readline"
+import { dirname, join } from "node:path"
 import type { AgentOSLiveRequest, AgentOSLiveResult } from "@opencode-ai/app/agentos"
 import type { AgentOSAccount, AgentOSStartup } from "@opencode-ai/app/agentos"
 import type { AgentOSDictation, AgentOSDictationResult } from "@opencode-ai/app/agentos"
@@ -124,7 +125,13 @@ export function startAgentOSRuntime(input: {
     input.binary,
     ["serve", "--login", "--hostname", "127.0.0.1", "--port", String(input.port), "--cors", "oc://renderer"],
     {
-      env: { ...process.env, OPENCODE_SERVER_PASSWORD: input.password, OPENCODE_SERVER_USERNAME: "opencode" },
+      env: {
+        ...process.env,
+        OPENCODE_SERVER_PASSWORD: input.password,
+        OPENCODE_SERVER_USERNAME: "opencode",
+        // Bundled next to the CLI; the server uses it to provision Omniwork's managed Python.
+        AGENTOS_UV_PATH: join(dirname(input.binary), "uv"),
+      },
       stdio: ["ignore", "pipe", "pipe"],
     },
   )

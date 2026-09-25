@@ -9,6 +9,7 @@ import { InstanceState } from "@/effect/instance-state"
 import { assertExternalDirectoryEffect } from "./external-directory"
 import { Instruction } from "../session/instruction"
 import { isPdfAttachment, sniffAttachmentMime } from "@/util/media"
+import { Office } from "@/util/office"
 
 const DEFAULT_READ_LIMIT = 2000
 const MAX_LINE_LENGTH = 2000
@@ -16,6 +17,7 @@ const MAX_LINE_SUFFIX = `... (line truncated to ${MAX_LINE_LENGTH} chars)`
 const MAX_BYTES = 50 * 1024
 const MAX_BYTES_LABEL = `${MAX_BYTES / 1024} KB`
 const SAMPLE_BYTES = 4096
+const MAX_OFFICE_BYTES = 50 * 1024 * 1024
 const SUPPORTED_IMAGE_MIMES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"])
 
 class ReadStop extends Schema.TaggedErrorClass<ReadStop>()("ReadStop", {}) {}
@@ -134,7 +136,10 @@ export const ReadTool = Tool.define<
       )
     })
 
-    const lines = Effect.fn("ReadTool.lines")(function* (filepath: string, opts: { limit: number; offset: number }) {
+    const lines = Effect.fn("ReadTool.lines")(function* <E, R>(
+      source: Stream.Stream<string, E, R>,
+      opts: { limit: number; offset: number },
+    ) {
       const start = opts.offset - 1
       const raw: string[] = []
       const flags = { bytes: 0, count: 0, cut: false, more: false, done: false }
@@ -144,10 +149,7 @@ export const ReadTool = Tool.define<
       // avoid Stream.runForEachWhile (it currently swallows the final unterminated
       // line of the upstream splitLines pipeline) and use a tagged error to stop the
       // upstream file stream as soon as the byte cap is reached.
-      const decoder = new TextDecoder("utf-8")
-      yield* fs.stream(filepath).pipe(
-        Stream.map((bytes) => decoder.decode(bytes, { stream: true })),
-        Stream.splitLines,
+      yield* source.pipe(
         Stream.runForEach((text) =>
           Effect.gen(function* () {
             if (flags.done) return yield* new ReadStop()
@@ -325,18 +327,60 @@ export const ReadTool = Tool.define<
         }
       }
 
-      if (isBinaryFile(filepath, sample)) {
-        return yield* Effect.fail(new Error(`Cannot read binary file: ${filepath}`))
+      // Office Open XML documents are zipped XML; render them to text so they page like any other file.
+      const office = Office.supported(filepath)
+      if (office && Number(stat.size) > MAX_OFFICE_BYTES) {
+        return yield* Effect.fail(
+          new Error(
+            `Office document is too large to render (${Math.round(Number(stat.size) / 1024 / 1024)} MB): ${filepath}. Use Python (e.g. openpyxl, pandas, python-docx) to process it.`,
+          ),
+        )
+      }
+      const document = office
+        ? yield* fs.readFile(filepath).pipe(
+            Effect.flatMap((bytes) =>
+              Effect.tryPromise({
+                try: () => Office.render(filepath, bytes),
+                catch: (err) =>
+                  new Error(
+                    `Cannot read Office document ${filepath}: ${err instanceof Error ? err.message : String(err)}`,
+                  ),
+              }),
+            ),
+          )
+        : undefined
+
+      if (!document && isBinaryFile(filepath, sample)) {
+        return yield* Effect.fail(
+          new Error(
+            Office.legacy(filepath)
+              ? `Cannot read binary file: ${filepath} (legacy binary Office format; use Python, e.g. pandas/xlrd, or convert it to the modern format)`
+              : `Cannot read binary file: ${filepath}`,
+          ),
+        )
       }
 
-      const file = yield* lines(filepath, { limit: params.limit ?? DEFAULT_READ_LIMIT, offset: params.offset || 1 })
+      const decoder = new TextDecoder("utf-8")
+      const file = yield* lines(
+        document
+          ? Stream.fromIterable(document)
+          : fs.stream(filepath).pipe(
+              Stream.map((bytes) => decoder.decode(bytes, { stream: true })),
+              Stream.splitLines,
+            ),
+        { limit: params.limit ?? DEFAULT_READ_LIMIT, offset: params.offset || 1 },
+      )
       if (file.count < file.offset && !(file.count === 0 && file.offset === 1)) {
         return yield* Effect.fail(
           new Error(`Offset ${file.offset} is out of range for this file (${file.count} lines)`),
         )
       }
 
-      let output = [`<path>${filepath}</path>`, `<type>file</type>`, "<content>\n"].join("\n")
+      let output = [
+        `<path>${filepath}</path>`,
+        `<type>${document ? `office document rendered as text (${path.extname(filepath).slice(1).toLowerCase()})` : "file"}</type>`,
+        "<content>\n",
+      ].join("\n")
       output += file.raw.map((line, i) => `${i + file.offset}: ${line}`).join("\n")
 
       const last = file.offset + file.raw.length - 1
@@ -349,9 +393,12 @@ export const ReadTool = Tool.define<
       } else {
         output += `\n\n(End of file - total ${file.count} lines)`
       }
+      if (document && (file.cut || (file.more && params.limit === undefined))) {
+        output += `\nFor full analysis of a large document (aggregates, filtering, charts), use Python (e.g. pandas/openpyxl, python-docx, python-pptx).`
+      }
       output += "\n</content>"
 
-      yield* warm(filepath)
+      if (!document) yield* warm(filepath)
 
       if (loaded.length > 0) {
         output += `\n\n<system-reminder>\n${loaded.map((item) => item.content).join("\n\n")}\n</system-reminder>`

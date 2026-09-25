@@ -31,10 +31,23 @@ function extract(messages: SessionV1.WithParts[]) {
   return paths
 }
 
+/**
+ * Where system instructions may come from.
+ * - "project": walk from the working directory up to the worktree (for non-git folders the worktree is "/",
+ *   so this reaches ancestors like $HOME), plus the global AGENTS.md or ~/.claude/CLAUDE.md fallback.
+ * - "folder": only the working directory itself, OmniCode's own global AGENTS.md, and config.instructions.
+ *   Used by agents that operate on arbitrary user folders, where ancestor coding instructions don't apply.
+ */
+export type Scope = "project" | "folder"
+
+export interface SystemOptions {
+  readonly scope?: Scope
+}
+
 export interface Interface {
   readonly clear: (messageID: MessageID) => Effect.Effect<void>
-  readonly systemPaths: () => Effect.Effect<Set<string>, FSUtil.Error>
-  readonly system: () => Effect.Effect<string[], FSUtil.Error>
+  readonly systemPaths: (options?: SystemOptions) => Effect.Effect<Set<string>, FSUtil.Error>
+  readonly system: (options?: SystemOptions) => Effect.Effect<string[], FSUtil.Error>
   readonly find: (dir: string) => Effect.Effect<string | undefined, FSUtil.Error>
   readonly resolve: (
     messages: SessionV1.WithParts[],
@@ -57,8 +70,9 @@ const layer: Layer.Layer<
     const global = yield* Global.Service
     const flags = yield* RuntimeFlags.Service
     const http = HttpClient.filterStatusOk(withTransientReadRetry(yield* HttpClient.HttpClient))
+    const configFile = path.join(global.config, "AGENTS.md")
     const globalFiles = [
-      path.join(global.config, "AGENTS.md"),
+      configFile,
       ...(!flags.disableClaudeCodePrompt ? [path.join(global.home, ".claude", "CLAUDE.md")] : []),
     ]
     const instructionFiles = [
@@ -76,11 +90,11 @@ const layer: Layer.Layer<
       ),
     )
 
-    const relative = Effect.fnUntraced(function* (instruction: string) {
+    const relative = Effect.fnUntraced(function* (instruction: string, scope: Scope) {
       const ctx = yield* InstanceState.context
       if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
         return yield* fs
-          .globUp(instruction, ctx.directory, ctx.worktree)
+          .globUp(instruction, ctx.directory, scope === "folder" ? ctx.directory : ctx.worktree)
           .pipe(Effect.catch(() => Effect.succeed([] as string[])))
       }
       return yield* fs
@@ -107,12 +121,14 @@ const layer: Layer.Layer<
       s.claims.delete(messageID)
     })
 
-    const systemPaths = Effect.fn("Instruction.systemPaths")(function* () {
+    const systemPaths = Effect.fn("Instruction.systemPaths")(function* (options?: SystemOptions) {
+      const scope = options?.scope ?? "project"
       const config = yield* cfg.get()
       const ctx = yield* InstanceState.context
       const paths = new Set<string>()
 
-      for (const file of globalFiles) {
+      // Folder scope never falls back to ~/.claude/CLAUDE.md: those are the user's coding instructions.
+      for (const file of scope === "folder" ? [configFile] : globalFiles) {
         if (yield* fs.existsSafe(file)) {
           paths.add(path.resolve(file))
           break
@@ -123,7 +139,7 @@ const layer: Layer.Layer<
       if (!Flag.OPENCODE_DISABLE_PROJECT_CONFIG) {
         for (const file of instructionFiles) {
           const matches = yield* fs
-            .findUp(file, ctx.directory, ctx.worktree)
+            .findUp(file, ctx.directory, scope === "folder" ? ctx.directory : ctx.worktree)
             .pipe(Effect.catch(() => Effect.succeed([])))
           if (matches.length > 0) {
             matches.forEach((item) => paths.add(path.resolve(item)))
@@ -143,7 +159,7 @@ const layer: Layer.Layer<
                   absolute: true,
                   include: "file",
                 })
-              : relative(instruction)
+              : relative(instruction, scope)
           ).pipe(Effect.catch(() => Effect.succeed([] as string[])))
           matches.forEach((item) => paths.add(path.resolve(item)))
         }
@@ -152,9 +168,9 @@ const layer: Layer.Layer<
       return paths
     })
 
-    const system = Effect.fn("Instruction.system")(function* () {
+    const system = Effect.fn("Instruction.system")(function* (options?: SystemOptions) {
       const config = yield* cfg.get()
-      const paths = yield* systemPaths()
+      const paths = yield* systemPaths(options)
       const urls = (config.instructions ?? []).filter(
         (item) => item.startsWith("https://") || item.startsWith("http://"),
       )

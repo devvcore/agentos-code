@@ -22,6 +22,7 @@ import { ChildProcessSpawner } from "effect/unstable/process/ChildProcessSpawner
 import { ShellPrompt, type Parameters } from "./shell/prompt"
 import { BashArity } from "@/permission/arity"
 import { SessionAttachment } from "@/session/attachment"
+import { WorkPython } from "@/work/python"
 
 export { Parameters } from "./shell/prompt"
 
@@ -430,8 +431,18 @@ export const ShellTool = Tool.define(
       )
       return {
         ...process.env,
+        ...(typeof ctx.extra?.scratch === "string" ? { OMNIWORK_SCRATCH: ctx.extra.scratch } : {}),
         ...extra.env,
       }
+    })
+
+    // Work sessions run document scripts on the managed Python; the first use starts provisioning it.
+    const workEnv = Effect.fn("ShellTool.workEnv")(function* (ctx: Tool.Context, env: NodeJS.ProcessEnv) {
+      // Subagents of a work session act for it; the session prompt gives the whole tree a scratch folder.
+      const work = ctx.agent === "work" || typeof ctx.extra?.scratch === "string"
+      if (!work) return env
+      void WorkPython.ensure()
+      return WorkPython.env(env, work, yield* Effect.promise(() => WorkPython.status()))
     })
 
     const run = Effect.fn("ShellTool.run")(function* (
@@ -649,7 +660,7 @@ export const ShellTool = Tool.define(
                   shell,
                   command: params.command,
                   cwd,
-                  env: yield* shellEnv(ctx, cwd),
+                  env: yield* workEnv(ctx, yield* shellEnv(ctx, cwd)),
                   timeout,
                 },
                 ctx,

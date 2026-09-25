@@ -18,6 +18,11 @@ export const ServeCommand = effectCmd({
     const opts = yield* resolveNetworkOptions(args)
     const server = yield* Effect.promise(() => Server.listen(opts))
     console.log(`opencode server listening on http://${server.hostname}:${server.port}`)
+    // The desktop app bundles uv: prepare Omniwork's Python in the background so it is ready before first use.
+    if (process.env.AGENTOS_UV_PATH) {
+      const { WorkPython } = yield* Effect.promise(() => import("../../work/python"))
+      void WorkPython.ensure()
+    }
 
     yield* Effect.never
   }),

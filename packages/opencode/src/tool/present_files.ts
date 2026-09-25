@@ -27,11 +27,28 @@ export const PresentFilesTool = Tool.define<typeof Parameters, Metadata, FSUtil.
       execute: (params: Schema.Schema.Type<typeof Parameters>, ctx: Tool.Context<Metadata>) =>
         Effect.gen(function* () {
           const instance = yield* InstanceState.context
-          const files = params.paths.map((item) => {
-            const full = path.isAbsolute(item) ? item : path.resolve(instance.directory, item)
-            const filepath = process.platform === "win32" ? FSUtil.normalizePath(full) : full
-            return { path: filepath, name: path.basename(filepath) }
-          })
+          const files = yield* Effect.forEach(
+            params.paths,
+            Effect.fnUntraced(function* (item) {
+              const full = path.isAbsolute(item) ? item : path.resolve(instance.directory, item)
+              const filepath = process.platform === "win32" ? FSUtil.normalizePath(full) : full
+              if (yield* fs.existsSafe(filepath)) return { path: filepath, name: path.basename(filepath) }
+              // Long absolute paths get mistyped. When the file is missing, fall back to the one file in the
+              // project with the same name, before any permission check can fire on the mistyped path.
+              const matches = yield* Effect.promise(() =>
+                Array.fromAsync(
+                  new Bun.Glob(`**/${path.basename(filepath).replace(/[[\]{}()*?!\\]/g, "\\$&")}`).scan({
+                    cwd: instance.directory,
+                    absolute: true,
+                    onlyFiles: true,
+                  }),
+                ),
+              )
+              const match = matches.filter((file) => !file.includes(`${path.sep}node_modules${path.sep}`))
+              if (match.length === 1) return { path: match[0], name: path.basename(match[0]) }
+              return { path: filepath, name: path.basename(filepath) }
+            }),
+          )
 
           // Permission checks come before any stat so paths outside the project are not probed unasked.
           yield* Effect.forEach(files, (file) => assertExternalDirectoryEffect(ctx, file.path, { read: true }), {

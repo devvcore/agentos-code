@@ -29,4 +29,5 @@ resources/icons
 resources/*.metainfo.xml
 
 resources/agentos-code
+resources/uv
 dist-agentos*/

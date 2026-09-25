@@ -13,6 +13,7 @@ import { TaskTool } from "./task"
 import { Database } from "@opencode-ai/core/database/database"
 import { TodoWriteTool } from "./todo"
 import { PresentFilesTool } from "./present_files"
+import { SpreadsheetRecalculateTool } from "./spreadsheet_recalculate"
 import { WebFetchTool } from "./webfetch"
 import { WriteTool } from "./write"
 import { InvalidTool } from "./invalid"
@@ -105,6 +106,7 @@ const layer = Layer.effect(
     const question = yield* QuestionTool
     const todo = yield* TodoWriteTool
     const present = yield* PresentFilesTool
+    const recalc = yield* SpreadsheetRecalculateTool
     const lsptool = yield* LspTool
     const plan = yield* PlanExitTool
     const webfetch = yield* WebFetchTool
@@ -220,6 +222,7 @@ const layer = Layer.effect(
           fetch: Tool.init(webfetch),
           todo: Tool.init(todo),
           present: Tool.init(present),
+          recalc: Tool.init(recalc),
           search: Tool.init(websearch),
           skill: Tool.init(skilltool),
           patch: Tool.init(patchtool),
@@ -244,6 +247,7 @@ const layer = Layer.effect(
             tool.fetch,
             tool.todo,
             tool.present,
+            tool.recalc,
             tool.search,
             tool.skill,
             tool.patch,

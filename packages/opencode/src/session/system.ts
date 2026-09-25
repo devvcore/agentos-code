@@ -51,7 +51,7 @@ export function provider(model: Provider.Model) {
 }
 
 export interface Interface {
-  readonly environment: (model: Provider.Model) => Effect.Effect<string[]>
+  readonly environment: (model: Provider.Model, options?: { scratch?: string }) => Effect.Effect<string[]>
   readonly skills: (agent: Agent.Info) => Effect.Effect<string | undefined>
   readonly mcp: (agent: Agent.Info, permission?: PermissionV1.Ruleset) => Effect.Effect<string | undefined>
 }
@@ -66,7 +66,10 @@ const layer = Layer.effect(
     const locations = yield* LocationServiceMap.Service
 
     return Service.of({
-      environment: Effect.fn("SystemPrompt.environment")(function* (model: Provider.Model) {
+      environment: Effect.fn("SystemPrompt.environment")(function* (
+        model: Provider.Model,
+        options?: { scratch?: string },
+      ) {
         const ctx = yield* InstanceState.context
         const references = yield* Effect.gen(function* () {
           return (yield* (yield* Reference.Service).list()).filter((reference) => reference.description !== undefined)
@@ -81,6 +84,11 @@ const layer = Layer.effect(
             `  Is directory a git repo: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
             `  Today's date: ${new Date().toDateString()}`,
+            ...(options?.scratch
+              ? [
+                  `  Scratch folder: ${options.scratch} (for throwaway scripts and intermediate files; not visible to the user; also $OMNIWORK_SCRATCH in shell commands)`,
+                ]
+              : []),
             `</env>`,
           ].join("\n"),
           references.length === 0

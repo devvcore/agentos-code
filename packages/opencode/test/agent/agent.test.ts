@@ -2,6 +2,8 @@ import { afterEach, expect } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Cause, Effect, Exit, Layer } from "effect"
 import path from "path"
+import os from "os"
+import fs from "fs/promises"
 import { disposeAllInstances, TestInstance } from "../fixture/fixture"
 import { testEffect } from "../lib/effect"
 import { Agent } from "../../src/agent/agent"
@@ -15,6 +17,7 @@ import { Plugin } from "../../src/plugin"
 import { Provider } from "../../src/provider/provider"
 import { Skill } from "../../src/skill"
 import { Truncate } from "../../src/tool/truncate"
+import { Scratch } from "../../src/session/scratch"
 
 const agentLayer = (flags: Partial<RuntimeFlags.Info> = {}) =>
   LayerNode.compile(
@@ -100,6 +103,34 @@ it.instance("work agent asks before shell commands that launch desktop apps", ()
     expect(bash("openssl rand -hex 8")).toBe("allow")
     const build = yield* load((svc) => svc.get("build"))
     expect(Permission.evaluate("bash", 'open "Site Report.xlsx"', build.permission).action).toBe("allow")
+  }),
+)
+
+it.instance("work agent allows external_directory access to OS temp dirs", () =>
+  Effect.gen(function* () {
+    const work = yield* load((svc) => svc.get("work"))
+    const build = yield* load((svc) => svc.get("build"))
+    const external = (agent: Agent.Info, dir: string) =>
+      Permission.evaluate("external_directory", path.join(dir, "*"), agent.permission).action
+    const tmp = yield* Effect.promise(() => fs.realpath(os.tmpdir()))
+    const dirs = [
+      os.tmpdir(),
+      path.join(tmp, "scratch"),
+      ...(process.platform === "win32" ? [] : ["/tmp", "/tmp/x", "/private/tmp", "/private/tmp/x/y"]),
+    ]
+    dirs.forEach((dir) => expect(external(work, dir)).toBe("allow"))
+    dirs.forEach((dir) => expect(external(build, dir)).toBe("ask"))
+    expect(external(work, "/some/other/path")).toBe("ask")
+  }),
+)
+
+it.instance("every agent may use the per-session work scratch folders", () =>
+  Effect.gen(function* () {
+    const dir = path.join(Scratch.root, "ses_scratch", "*")
+    for (const name of ["work", "general", "explore", "build"]) {
+      const agent = yield* load((svc) => svc.get(name))
+      expect(Permission.evaluate("external_directory", dir, agent!.permission).action).toBe("allow")
+    }
   }),
 )
 
