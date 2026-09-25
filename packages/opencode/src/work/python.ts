@@ -8,7 +8,8 @@ import { Flock } from "@opencode-ai/core/util/flock"
 // libraries the work agent and its skills rely on. The desktop app bundles uv (AGENTOS_UV_PATH); the CLI
 // uses uv from PATH when present and otherwise leaves the agent on system python as before.
 
-export const PYTHON = "3.12.14"
+// A minor version, not a patch: any uv (bundled or an older one on PATH) resolves it to the newest 3.12 it knows.
+export const PYTHON = "3.12"
 // Resolve transitive dependencies as of this instant so every install of a stamp gets the same packages.
 export const EXCLUDE_NEWER = "2026-09-24T00:00:00Z"
 export const REQUIREMENTS = [
@@ -156,6 +157,7 @@ async function provision(binary: string) {
     ])
     await appendFile(log, out + err)
     if (code !== 0) throw new Error(`${path.basename(cmd[0])} ${cmd[1]} exited with ${code}`)
+    return out + err
   }
 
   // Each stamp builds in its own folder; a partial folder from an interrupted run is rebuilt from uv's cache.
@@ -168,8 +170,9 @@ async function provision(binary: string) {
   await run([binary, "venv", "--seed", "--clear", "--python", PYTHON, envDir])
   await run([binary, "pip", "install", "--python", python, "--exclude-newer", EXCLUDE_NEWER, "-r", requirements])
   await run([python, "-c", IMPORTS])
+  const version = (await run([python, "--version"])).trim().replace(/^Python /, "")
 
-  const next: Current = { stamp: id, python, bin, version: PYTHON, installedAt: new Date().toISOString() }
+  const next: Current = { stamp: id, python, bin, version, installedAt: new Date().toISOString() }
   await writeFile(path.join(dir, "current.json.tmp"), JSON.stringify(next, null, 2))
   await rename(path.join(dir, "current.json.tmp"), path.join(dir, "current.json"))
   await write(`ready ${id} in ${Math.round((Date.now() - started) / 1000)}s`)
