@@ -8,12 +8,10 @@ Nothing is bundled with this skill. Write the snippets below into your scratch f
 
 ```bash
 python3 -c "import pptx; print('python-pptx', pptx.__version__)" || python3 -m pip install --quiet python-pptx
-command -v soffice || ls /Applications/LibreOffice.app/Contents/MacOS/soffice 2>/dev/null   # optional: PPTX -> PDF
-command -v pdftoppm || python3 -c "import fitz" 2>/dev/null && echo "renderer ok"         # optional: PDF -> PNG
 command -v markitdown                                                                       # optional reader
 ```
 
-If a tool is missing, use the next option down, and tell the user which checks you could not run.
+If a tool is missing, use the next option down, and tell the user which checks you could not run. To look at the slides, use the `render_pages` tool (see Verify); it finds LibreOffice itself.
 
 ## Choose the approach
 
@@ -218,13 +216,9 @@ print(json.dumps(report, indent=2))
 
 ### 2. Render every slide and look at it
 
-```bash
-mkdir -p "$OMNIWORK_SCRATCH/render"
-soffice --headless --convert-to pdf --outdir "$OMNIWORK_SCRATCH/render" deck.pptx        # or the full path to LibreOffice's soffice on macOS
-pdftoppm -png -r 60 "$OMNIWORK_SCRATCH/render/deck.pdf" "$OMNIWORK_SCRATCH/render/slide"               # or PyMuPDF: page.get_pixmap(dpi=60).save(...)
-```
+Call the `render_pages` tool on `deck.pptx`. It returns up to 12 slides per call as images; pass `pages` for the rest of a longer deck, or `scale: 0.5` for a cheap overview.
 
-Open every slide image and check for text overflow or clipping, overlapping shapes, readable chart labels, consistent title positions, and no leftover template content. Fix what you find and render again. LibreOffice's rendering is close to PowerPoint's but not identical (fonts may substitute). If LibreOffice is not installed, macOS can make a preview of the first slide with `qlmanage -t -s 1200 -o "$OMNIWORK_SCRATCH/render" deck.pptx`. Otherwise tell the user that you did not check the slides visually.
+Look at every slide image and check for text overflow or clipping, overlapping shapes, readable chart labels, consistent title positions, and no leftover template content. Fix what you find and render again. LibreOffice's rendering is close to PowerPoint's but not identical (fonts may substitute). If `render_pages` says LibreOffice isn't installed, skip this step: do not install anything or render on a remote computer or sandbox. Rely on the structural checks above and tell the user that you did not check the slides visually.
 
 ### 3. Report to the user
 

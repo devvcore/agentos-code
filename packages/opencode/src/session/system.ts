@@ -1,5 +1,7 @@
+import fs from "fs/promises"
+import path from "path"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Context, Effect, Layer } from "effect"
+import { Context, Duration, Effect, Layer } from "effect"
 
 import { InstanceState } from "@/effect/instance-state"
 
@@ -50,8 +52,75 @@ export function provider(model: Provider.Model) {
   return [PROMPT_DEFAULT]
 }
 
+/**
+ * What's in the Omniwork working folder, so the agent starts from the user's files instead of hunting for them: every
+ * top-level entry, then one level into subfolders (`outputs/` first) until `limit` lines. Dot-folders and dependency
+ * folders are skipped. Paths are relative to the folder.
+ */
+export async function folder(dir: string, limit = 60) {
+  const visible = async (target: string) =>
+    (await fs.readdir(target, { withFileTypes: true }).catch(() => []))
+      .filter((entry) => !entry.name.startsWith(".") && !["node_modules", "__pycache__"].includes(entry.name))
+      .toSorted((a, b) => a.name.localeCompare(b.name))
+  const top = await visible(dir)
+  const children = new Map(
+    await Promise.all(
+      top
+        .filter((entry) => entry.isDirectory())
+        .map(async (entry) => [entry.name, await visible(path.join(dir, entry.name))] as const),
+    ),
+  )
+  // Top-level entries always win; the remaining budget goes to subfolder contents, outputs/ first.
+  const shown = top.slice(0, limit)
+  const budget = [...children.keys()]
+    .filter((name) => shown.some((entry) => entry.name === name))
+    .toSorted((a, b) => (a === "outputs" ? -1 : b === "outputs" ? 1 : 0))
+    .reduce(
+      (acc, name) => {
+        const take = Math.max(0, Math.min(children.get(name)!.length, acc.left))
+        acc.take.set(name, take)
+        acc.left -= take
+        return acc
+      },
+      { left: limit - shown.length, take: new Map<string, number>() },
+    ).take
+  const rows = shown.flatMap((entry) => [
+    { name: entry.name, directory: entry.isDirectory(), depth: 0, count: children.get(entry.name)?.length },
+    ...(children.get(entry.name) ?? []).slice(0, budget.get(entry.name) ?? 0).map((child) => ({
+      name: path.join(entry.name, child.name),
+      directory: child.isDirectory(),
+      depth: 1,
+      count: undefined,
+    })),
+  ])
+  const total = top.length + [...children.values()].reduce((sum, list) => sum + list.length, 0)
+  const size = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), 3)
+    return `${(bytes / 1024 ** unit).toFixed(1)} ${["B", "KB", "MB", "GB"][unit]}`
+  }
+  const date = (time: Date) =>
+    new Date(time.getTime() - time.getTimezoneOffset() * 60_000).toISOString().slice(0, 16).replace("T", " ")
+  const lines = await Promise.all(
+    rows.map(async (row) => {
+      const indent = "  ".repeat(row.depth + 1)
+      if (row.directory)
+        return `${indent}${row.name}/ (folder${row.count === undefined ? "" : row.count === 1 ? ", 1 item" : `, ${row.count} items`})`
+      const stat = await fs.stat(path.join(dir, row.name)).catch(() => undefined)
+      return stat ? `${indent}${row.name} (${size(stat.size)}, modified ${date(stat.mtime)})` : `${indent}${row.name}`
+    }),
+  )
+  return [
+    ...(lines.length === 0 ? ["  (empty)"] : lines),
+    ...(total > rows.length ? [`  …and ${total - rows.length} more`] : []),
+  ].join("\n")
+}
+
 export interface Interface {
-  readonly environment: (model: Provider.Model, options?: { scratch?: string }) => Effect.Effect<string[]>
+  readonly environment: (
+    model: Provider.Model,
+    options?: { scratch?: string; folder?: boolean },
+  ) => Effect.Effect<string[]>
   readonly skills: (agent: Agent.Info) => Effect.Effect<string | undefined>
   readonly mcp: (agent: Agent.Info, permission?: PermissionV1.Ruleset) => Effect.Effect<string | undefined>
 }
@@ -68,9 +137,13 @@ const layer = Layer.effect(
     return Service.of({
       environment: Effect.fn("SystemPrompt.environment")(function* (
         model: Provider.Model,
-        options?: { scratch?: string },
+        options?: { scratch?: string; folder?: boolean },
       ) {
         const ctx = yield* InstanceState.context
+        // Listed fresh every turn so new deliverables show up; a slow disk just drops the listing.
+        const listing = options?.folder
+          ? yield* Effect.promise(() => folder(ctx.directory)).pipe(Effect.timeoutOption(Duration.seconds(1)))
+          : undefined
         const references = yield* Effect.gen(function* () {
           return (yield* (yield* Reference.Service).list()).filter((reference) => reference.description !== undefined)
         }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
@@ -91,6 +164,13 @@ const layer = Layer.effect(
               : []),
             `</env>`,
           ].join("\n"),
+          listing === undefined
+            ? undefined
+            : [
+                `Working folder: ${ctx.directory}`,
+                `The user's files are here; use paths relative to it.`,
+                ...(listing._tag === "Some" ? [listing.value] : ["  (listing unavailable; list the folder to see it)"]),
+              ].join("\n"),
           references.length === 0
             ? undefined
             : [

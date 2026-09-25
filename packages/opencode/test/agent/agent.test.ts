@@ -875,3 +875,21 @@ it.instance(
     },
   },
 )
+
+it.instance("work agent never gets AgentOS remote-compute tools; build keeps them", () =>
+  Effect.gen(function* () {
+    const work = yield* load((svc) => svc.get("work"))
+    const build = yield* load((svc) => svc.get("build"))
+    const remote = [
+      "agentos_computer",
+      "agentos_computer_start",
+      "agentos_computer_shell",
+      "agentos_sandbox_run",
+      "agentos_sandbox_preview",
+      "agentos_browser_run",
+    ]
+    const tools = [...remote, "agentos_wiki_search", "agentos_tasks_list", "agentos_drive_read"]
+    expect([...Permission.disabled(tools, work.permission)]).toEqual(remote)
+    expect(Permission.disabled(tools, build.permission).size).toBe(0)
+  }),
+)

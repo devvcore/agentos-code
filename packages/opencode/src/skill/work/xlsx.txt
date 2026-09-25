@@ -166,6 +166,7 @@ Pick 2 or 3 important outputs (a total, a growth figure, a final metric). Recomp
 - Input cells are blue, formulas are black, and links to other sheets are green (or the workbook's own convention is followed).
 - Headers carry units, number formats are applied, panes are frozen, column widths are set, and there are no `######` columns (widen them).
 - The original file is untouched unless the user asked for an in-place edit.
+- For charts or a dashboard sheet, call the `render_pages` tool on the workbook to see the sheets as printed pages. If it says LibreOffice isn't installed, skip this check (do not render on a remote computer or sandbox) and tell the user the layout wasn't visually verified.
 
 ### 4. Report to the user
 

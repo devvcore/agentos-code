@@ -1,0 +1,8 @@
+Render pages of a PDF, Word, PowerPoint, or Excel file to images and look at them. This is how you visually check a document you made or changed: layout, overflowing or clipped text, overlapping shapes, charts, tables, fonts, blank pages.
+
+Usage:
+- `path`: a .pdf, .docx, .pptx, .xlsx, .odt, .odp, or .ods file. PDFs always render. Office files are converted to PDF with LibreOffice first, so they render only when LibreOffice is installed; if it is not, the tool says so immediately.
+- `pages`: 1-based page or slide numbers, at most 12 per call. Defaults to the first 12. Call again with other page numbers to see the rest.
+- `scale`: optional image size relative to the default (1280px on the longest edge). Use 0.5 for a cheap overview of many pages, or up to 1.5 to read small print.
+- The images come back with the result; you do not need to open or read any files.
+- If rendering is not available, do not install software, and do not use remote computers or sandboxes to render. Rely on the structural checks and tell the user the layout was not visually verified.

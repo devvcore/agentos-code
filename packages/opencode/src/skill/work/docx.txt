@@ -9,11 +9,10 @@ Nothing is bundled with this skill. Write the snippets below into your scratch f
 ```bash
 python3 -c "import docx; print('python-docx', docx.__version__)" || python3 -m pip install --quiet python-docx
 command -v pandoc; command -v markitdown                # optional readers
-command -v soffice || ls /Applications/LibreOffice.app/Contents/MacOS/soffice 2>/dev/null   # optional: DOCX -> PDF
-command -v pdftoppm || python3 -c "import fitz" 2>/dev/null && echo "renderer ok"         # optional: PDF -> PNG
+command -v soffice || ls /Applications/LibreOffice.app/Contents/MacOS/soffice 2>/dev/null   # optional: DOCX -> PDF deliverables
 ```
 
-If a tool is missing, use the next option down. When nothing can render the document, say that the visual check could not be done.
+If a tool is missing, use the next option down. To look at the pages, use the `render_pages` tool (see Verify); it finds LibreOffice itself.
 
 ## Choose the approach
 
@@ -255,13 +254,9 @@ print(json.dumps(report, indent=2))
 
 ### 2. Visual check (render and look)
 
-```bash
-mkdir -p "$OMNIWORK_SCRATCH/render"
-soffice --headless --convert-to pdf --outdir "$OMNIWORK_SCRATCH/render" out.docx          # or the full path to LibreOffice's soffice on macOS
-pdftoppm -png -r 80 "$OMNIWORK_SCRATCH/render/out.pdf" "$OMNIWORK_SCRATCH/render/page"                  # or PyMuPDF: page.get_pixmap(dpi=80).save(...)
-```
+Call the `render_pages` tool on `out.docx` (12 pages per call; pass `pages` for the rest of a longer document). The page images come back with the result.
 
-Look at the page images: headings, tables that don't run off the page, images, headers and footers, page breaks where intended, no blank pages. Rendering is done by LibreOffice, so small font or spacing differences from Word are normal. Broken layout is not. If LibreOffice is not installed, macOS can make a first-page preview with `qlmanage -t -s 1200 -o "$OMNIWORK_SCRATCH/render" out.docx`. Otherwise tell the user that you checked the document's structure but could not render it.
+Look at the page images: headings, tables that don't run off the page, images, headers and footers, page breaks where intended, no blank pages. Rendering is done by LibreOffice, so small font or spacing differences from Word are normal. Broken layout is not. If `render_pages` says LibreOffice isn't installed, skip this step: do not install anything or render on a remote computer or sandbox, and tell the user that you checked the document's structure but could not render it.
 
 ### 3. Report to the user
 

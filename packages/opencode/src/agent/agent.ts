@@ -62,6 +62,11 @@ export type Info = DeepMutable<Schema.Schema.Type<typeof Info>>
 // The AgentOS build runs Omniwork on one model with no model picker. `agent.work.model` in config still overrides it.
 export const WORK_MODEL = "agentos/z-ai/glm-5.3-flash"
 
+// Omniwork works on the user's local files. The AgentOS remote-compute tools (cloud computers, sandboxes, the remote
+// browser) run on another machine, so using them means copying the user's files off this one. User files must not
+// leave the machine without the user asking, so the work agent and its subagents never get these tools. Build keeps them.
+export const WORK_REMOTE_TOOLS = ["agentos_computer", "agentos_computer_*", "agentos_sandbox_*", "agentos_browser_run"]
+
 // Omniwork's model is authoritative: it wins over whatever model the client sends with a prompt.
 export function pinnedModel(agent: Info) {
   return agent.name === "work" ? agent.model : undefined
@@ -219,6 +224,7 @@ const layer = Layer.effect(
                   "xdg-open *": "ask",
                   "start *": "ask",
                 },
+                ...Object.fromEntries(WORK_REMOTE_TOOLS.map((tool) => [tool, "deny" as const])),
               }),
               user,
             ),

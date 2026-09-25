@@ -81,6 +81,7 @@
     "@dukelib/sheets-wasm": "0.1.23",
     "@effect/opentelemetry": "catalog:",
     "@effect/platform-node": "catalog:",
+    "@embedpdf/pdfium": "2.15.1",
     "@ff-labs/fff-bun": "0.9.4",
     "@gitlab/opencode-gitlab-auth": "1.3.3",
     "@modelcontextprotocol/sdk": "1.29.0",

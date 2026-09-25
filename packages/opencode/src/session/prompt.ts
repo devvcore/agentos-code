@@ -1276,7 +1276,7 @@ const layer = Layer.effect(
 
             const [skills, env, instructions, mcpInstructions, modelMsgs] = yield* Effect.all([
               sys.skills(agent),
-              sys.environment(model, { scratch }),
+              sys.environment(model, { scratch, folder: work }),
               // Don't inherit coding instructions from ancestors or ~/.claude in Omniwork session trees.
               instruction.system({ scope: work ? "folder" : "project" }).pipe(Effect.orDie),
               sys.mcp(agent, session.permission),

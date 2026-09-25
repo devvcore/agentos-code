@@ -215,7 +215,7 @@ pdfplumber measures `top` from the top of the page, while reportlab measures `y`
 
 ## Common pitfalls
 
-- Assuming there's a text layer. Scans return empty text, and some PDFs return garbled text because of font encodings. When extraction looks wrong, render the page and compare.
+- Assuming there's a text layer. Scans return empty text, and some PDFs return garbled text because of font encodings. When extraction looks wrong, render the page with `render_pages` and compare.
 - Table extraction merging or splitting columns. Always check the totals against the rendered page.
 - Overwriting the input, or losing form fields and bookmarks by rebuilding page by page. Prefer `PdfWriter(clone_from=...)`.
 - Form values set on the wrong field name, which fails silently.
@@ -248,11 +248,7 @@ Pass the values you wrote (names, dates, headings) as `expected text`. `missing_
 
 ### 2. Render and look
 
-```bash
-mkdir -p "$OMNIWORK_SCRATCH/render" && pdftoppm -png -r 70 out.pdf "$OMNIWORK_SCRATCH/render/page"
-```
-
-Without poppler, use PyMuPDF: `import os, fitz; [p.get_pixmap(dpi=70).save(os.path.join(os.environ["OMNIWORK_SCRATCH"], "render", f"page-{p.number + 1}.png")) for p in fitz.open("out.pdf")]`. On macOS only, `qlmanage -t -s 1200 -o "$OMNIWORK_SCRATCH/render" out.pdf` renders the first page. Look at every page you changed or created: filled values sitting inside their boxes, watermark placement, rotation, table layout, fonts (no black boxes), and no blank pages. If nothing can render the file, tell the user that the visual check was not done.
+Call the `render_pages` tool on `out.pdf`. It renders PDFs itself (no poppler or PyMuPDF needed), returns up to 12 pages per call as images, and takes `pages` for the rest. Look at every page you changed or created: filled values sitting inside their boxes, watermark placement, rotation, table layout, fonts (no black boxes), and no blank pages.
 
 ### 3. Report to the user
 

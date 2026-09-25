@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test"
+import fs from "fs/promises"
+import path from "path"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Effect, Layer } from "effect"
 import type { Agent } from "../../src/agent/agent"
@@ -9,6 +11,8 @@ import type { Provider } from "../../src/provider/provider"
 import { SystemPrompt } from "../../src/session/system"
 import { MCP } from "../../src/mcp"
 import { testEffect } from "../lib/effect"
+import { tmpdir } from "../fixture/fixture"
+import { InstanceState } from "../../src/effect/instance-state"
 
 const skills: Skill.Info[] = [
   {
@@ -108,6 +112,74 @@ describe("session.system", () => {
       expect(prompt).toContain("# Prompt and Tool Use")
     }
   })
+
+  test("working folder listing shows files with sizes, one level of subfolders, and skips hidden and dependency folders", async () => {
+    await using tmp = await tmpdir()
+    const write = async (file: string, bytes = 10) => {
+      await fs.mkdir(path.dirname(path.join(tmp.path, file)), { recursive: true })
+      await fs.writeFile(path.join(tmp.path, file), "x".repeat(bytes))
+    }
+    await write("sales_2026.csv", 2048)
+    await write("outputs/Summary.xlsx")
+    await write("data/raw/deep.csv")
+    await write(".git/HEAD")
+    await write("node_modules/pkg/index.js")
+    await write(".env")
+
+    const listing = await SystemPrompt.folder(tmp.path)
+    expect(listing).toContain("  sales_2026.csv (2.0 KB, modified ")
+    expect(listing).toContain("  outputs/ (folder, 1 item)")
+    expect(listing).toContain(`    ${path.join("outputs", "Summary.xlsx")} (10 B, modified `)
+    expect(listing).toContain(`    ${path.join("data", "raw")}/ (folder)`)
+    // One level into subfolders only; hidden and dependency folders never appear.
+    expect(listing).not.toContain("deep.csv")
+    expect(listing).not.toContain(".git")
+    expect(listing).not.toContain(".env")
+    expect(listing).not.toContain("node_modules")
+    expect(listing).not.toContain("more")
+
+    await using empty = await tmpdir()
+    expect(await SystemPrompt.folder(empty.path)).toBe("  (empty)")
+  })
+
+  test("working folder listing is capped, keeps every top-level entry, and gives outputs/ first claim on the rest", async () => {
+    await using tmp = await tmpdir()
+    await Promise.all([
+      ...Array.from({ length: 5 }, (_, i) => fs.writeFile(path.join(tmp.path, `file-${i}.txt`), "x")),
+      fs.mkdir(path.join(tmp.path, "archive")).then(() =>
+        Promise.all(Array.from({ length: 20 }, (_, i) => fs.writeFile(path.join(tmp.path, "archive", `old-${i}.txt`), "x"))),
+      ),
+      fs.mkdir(path.join(tmp.path, "outputs")).then(() =>
+        Promise.all(Array.from({ length: 3 }, (_, i) => fs.writeFile(path.join(tmp.path, "outputs", `Report ${i}.docx`), "x"))),
+      ),
+    ])
+
+    const lines = (await SystemPrompt.folder(tmp.path, 10)).split("\n")
+    // 7 top-level entries + 3 from outputs/ fill the cap; archive/ contents are summarized.
+    expect(lines).toHaveLength(11)
+    expect(lines.filter((line) => line.startsWith("  file-"))).toHaveLength(5)
+    expect(lines).toContain("  archive/ (folder, 20 items)")
+    expect(lines.filter((line) => line.includes("Report "))).toHaveLength(3)
+    expect(lines.some((line) => line.includes("old-"))).toBe(false)
+    expect(lines.at(-1)).toBe("  …and 20 more")
+  })
+
+  it.instance("environment lists the working folder only for work sessions", () =>
+    Effect.gen(function* () {
+      const ctx = yield* InstanceState.context
+      yield* Effect.promise(() => fs.writeFile(path.join(ctx.directory, "sales_2026.csv"), "region,total"))
+      const sys = yield* SystemPrompt.Service
+      const model = { providerID: "test", api: { id: "test-model" } } as Provider.Model
+
+      const work = (yield* sys.environment(model, { scratch: "/scratch", folder: true })).join("\n")
+      expect(work).toContain(`Working folder: ${ctx.directory}\nThe user's files are here; use paths relative to it.`)
+      expect(work).toContain("  sales_2026.csv (12 B, modified ")
+
+      const code = (yield* sys.environment(model)).join("\n")
+      expect(code).not.toContain("Working folder:")
+      expect(code).not.toContain("sales_2026.csv")
+    }),
+  )
 
   it.effect("skills output is sorted by name and stable across calls", () =>
     Effect.gen(function* () {

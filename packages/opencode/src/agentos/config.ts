@@ -10,8 +10,14 @@ export function applyAccountConfig(config: ConfigV1.Info, account: ConfigV1.Info
     model: config.model?.startsWith("agentos/") ? config.model : account.model,
     small_model: account.small_model, share: "disabled", autoshare: false, autoupdate: false,
     mcp: { ...config.mcp, agentos: account.mcp!.agentos },
+    // These AgentOS tools only work inside an AgentOS interactive chat run (they fail here with "Questions need a
+    // current interactive chat run"), and OmniCode has native todowrite/question for the same jobs. Denied tools are
+    // dropped from the tool list, so no agent is offered them.
+    permission: { ...config.permission, ...Object.fromEntries(CHAT_RUN_TOOLS.map((tool) => [tool, "deny" as const])) },
   }
 }
+
+export const CHAT_RUN_TOOLS = ["agentos_plan", "agentos_ask_user"]
 
 export const Models = z.object({ data: z.array(z.object({
   id: z.string(), name: z.string(), context_length: z.number().positive(), max_output_tokens: z.number().positive(),

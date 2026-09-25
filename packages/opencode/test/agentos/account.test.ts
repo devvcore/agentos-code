@@ -3,6 +3,7 @@ import { createHash } from "node:crypto"
 import { stat } from "node:fs/promises"
 import { apiURL, authenticated, login, saveCredential } from "../../src/agentos/account"
 import { applyAccountConfig, configuration } from "../../src/agentos/config"
+import { Permission } from "../../src/permission"
 import { tmpdir } from "../fixture/fixture"
 
 test("PKCE login binds the loopback callback to state and exchanges once", async () => {
@@ -96,6 +97,12 @@ test("account policy pins all model calls and MCP to AgentOS while retaining pro
     expect(result.share).toBe("disabled")
     expect(result.mcp?.agentos).toEqual(config.mcp.agentos)
     expect(result.mcp?.local).toBeDefined()
+    // Chat-run-only AgentOS tools are denied (and so hidden) for every agent; the rest of the server stays available.
+    const rules = Permission.fromConfig(result.permission ?? {})
+    expect([...Permission.disabled(["agentos_plan", "agentos_ask_user", "agentos_wiki_search"], rules)]).toEqual([
+      "agentos_plan",
+      "agentos_ask_user",
+    ])
   } finally { await server.stop(true) }
 })
 

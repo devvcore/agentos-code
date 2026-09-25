@@ -532,8 +532,13 @@ describe("tool.task", () => {
       const fromWork = yield* sessions.get((yield* run("work")).metadata.sessionId)
       expect(Permission.evaluate("external_directory", tmp, fromWork.permission ?? []).action).toBe("allow")
 
+      // Remote-compute tools would copy the user's files off the machine: denied for work subagents, not for build's.
+      const remote = ["agentos_computer", "agentos_computer_shell", "agentos_sandbox_run", "agentos_browser_run"]
+      expect([...Permission.disabled([...remote, "agentos_wiki_search"], fromWork.permission ?? [])]).toEqual(remote)
+
       const fromBuild = yield* sessions.get((yield* run("build")).metadata.sessionId)
       expect(Permission.evaluate("external_directory", tmp, fromBuild.permission ?? []).action).not.toBe("allow")
+      expect(Permission.disabled(remote, fromBuild.permission ?? []).size).toBe(0)
     }),
   )
 
