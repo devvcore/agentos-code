@@ -321,6 +321,21 @@ describe("opencode run (non-interactive subprocess)", () => {
   )
 
   cliIt.live(
+    "a message with an open, silent stdin pipe still runs, streams events, and exits",
+    ({ llm, opencode }) =>
+      Effect.gen(function* () {
+        yield* llm.text("hello despite stdin")
+        const run = yield* opencode.startRun("say hi", { format: "json", stdin: "pipe" })
+        const result = yield* run.result
+
+        expect(result.exitCode).toBe(0)
+        expect(result.stdout).toContain("hello despite stdin")
+        expect(result.durationMs).toBeLessThan(20_000)
+      }),
+    30_000,
+  )
+
+  cliIt.live(
     "SIGINT interrupts an active non-interactive run without leaking the process",
     ({ llm, opencode }) =>
       Effect.gen(function* () {

@@ -90,7 +90,16 @@ export const effectCmd = <Args, A>(opts: EffectCmdOpts<Args, A>) =>
       try {
         await AppRuntime.runPromise(opts.handler(args).pipe(Effect.provideService(InstanceRef, ctx)))
       } finally {
-        await AppRuntime.runPromise(store.dispose(ctx))
+        // The process exits right after the command. A server or MCP transport that never answers its
+        // shutdown must not keep a finished command alive.
+        await AppRuntime.runPromise(
+          store.dispose(ctx).pipe(
+            Effect.timeoutOrElse({
+              duration: "5 seconds",
+              orElse: () => Effect.logWarning("instance dispose timed out", { directory }),
+            }),
+          ),
+        )
       }
     },
   })

@@ -1,5 +1,9 @@
-import { rm, stat } from "node:fs/promises"
+import path from "node:path"
+import { createHash } from "node:crypto"
+import { chmod, rm, stat } from "node:fs/promises"
+import { z } from "zod"
 import {
+  Account,
   account,
   apiURL,
   authenticated,
@@ -8,15 +12,48 @@ import {
   login,
   saveCredential,
   SignInRequired,
+  Unavailable,
+  type Credential,
 } from "./account"
-import { configuration } from "./config"
+import { catalog, configuration, Models } from "./config"
 
 export type PreparedAccount = Awaited<ReturnType<typeof prepare>>
 
-async function prepare(credential: Awaited<ReturnType<typeof loadCredential>>) {
-  const details = await account(credential)
-  const config = JSON.stringify(await configuration(credential, process.env.AGENTOS_MODEL || details.default_model))
-  return { credential, details, config }
+// Each startup check gets this long; together they stay well inside a run's budget.
+export const STARTUP_TIMEOUT = 8000
+
+// The last account and model list AgentOS verified for this login. When AgentOS is slow or down at startup,
+// the session starts from it instead of failing; model calls still go to AgentOS and are still billed there.
+const Saved = z.object({ fingerprint: z.string(), url: z.string(), details: Account, catalog: Models })
+
+export function savedAccountPath() {
+  return path.join(path.dirname(credentialPath()), "account-cache.json")
+}
+
+function fingerprint(credential: Credential) {
+  return createHash("sha256").update(credential.url + "\n" + credential.token).digest("hex")
+}
+
+async function prepare(credential: Credential) {
+  const model = (details: z.infer<typeof Account>) => process.env.AGENTOS_MODEL || details.default_model
+  try {
+    const details = await account(credential, STARTUP_TIMEOUT)
+    const models = await catalog(credential, STARTUP_TIMEOUT)
+    const config = JSON.stringify(await configuration(credential, model(details), models))
+    const file = savedAccountPath()
+    const saved = { fingerprint: fingerprint(credential), url: credential.url, details, catalog: models }
+    await Bun.write(file, JSON.stringify(saved) + "\n", { mode: 0o600 })
+      .then(() => chmod(file, 0o600))
+      .catch(() => {})
+    return { credential, details, config }
+  } catch (error) {
+    if (!(error instanceof Unavailable)) throw error
+    const saved = Saved.safeParse(await Bun.file(savedAccountPath()).json().catch(() => undefined))
+    if (!saved.success || saved.data.fingerprint !== fingerprint(credential)) throw error
+    console.error(`${error.message} Starting with the account and models AgentOS last confirmed.`)
+    const config = JSON.stringify(await configuration(credential, model(saved.data.details), saved.data.catalog))
+    return { credential, details: saved.data.details, config }
+  }
 }
 
 export async function signIn(input: Parameters<typeof login>[0]) {
@@ -96,6 +133,7 @@ export function terminalAccount(reload: (result: PreparedAccount) => Promise<voi
         if (!(error instanceof SignInRequired)) throw error
       }
       await rm(credentialPath(), { force: true })
+      await rm(savedAccountPath(), { force: true })
     },
   }
 }

@@ -13,6 +13,7 @@ import type { EventSource } from "@opencode-ai/tui/context/sdk"
 import { writeHeapSnapshot } from "v8"
 import { ServerAuth } from "@/server/auth"
 import { validateSession } from "../tui/validate-session"
+import { readPipedStdin } from "../stdin"
 import { win32InstallCtrlCGuard } from "@opencode-ai/tui/terminal-win32"
 
 declare global {
@@ -57,7 +58,7 @@ async function target() {
 }
 
 async function input(value?: string) {
-  const piped = process.stdin.isTTY ? undefined : await Bun.stdin.text()
+  const piped = await readPipedStdin({ required: !value })
   if (!value) return piped
   if (!piped) return value
   return piped + "\n" + value

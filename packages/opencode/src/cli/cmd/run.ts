@@ -25,8 +25,12 @@ import { Filesystem } from "@/util/filesystem"
 import { createOpencodeClient, type OpencodeClient, type ToolPart } from "@opencode-ai/sdk/v2"
 import { FormatError, FormatUnknownError } from "../error"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./run/runtime.stdin"
+import { readPipedStdin } from "../stdin"
 
 type ModelInput = Parameters<OpencodeClient["session"]["prompt"]>[0]["model"]
+
+const EVENT_CONNECT_TIMEOUT_MS = 10_000
+const EVENT_DRAIN_TIMEOUT_MS = 3_000
 
 function pick(value: string | undefined): ModelInput | undefined {
   if (!value) return undefined
@@ -413,7 +417,7 @@ export const RunCommand = effectCmd({
         }
       }
 
-      const piped = process.stdin.isTTY ? undefined : await Bun.stdin.text()
+      const piped = await readPipedStdin({ required: message.trim().length === 0 && !args.command })
       message = resolveRunInput(message, piped) ?? ""
       const initialInput = resolveRunInput(rawMessage, piped)
 
@@ -675,7 +679,12 @@ export const RunCommand = effectCmd({
         }
         const sessionID = sess.id
 
+        // Part IDs already written, so a backfill after a lost event stream never repeats one.
+        const written = new Set<string>()
+        let idle = false
         function emit(type: string, data: Record<string, unknown>) {
+          const part = data.part
+          if (part && typeof part === "object" && "id" in part && typeof part.id === "string") written.add(part.id)
           if (args.format === "json") {
             process.stdout.write(
               JSON.stringify({
@@ -694,12 +703,17 @@ export const RunCommand = effectCmd({
         // to stdout/UI. `client` is passed explicitly because attach mode may
         // rebind the SDK to the session's directory after the subscription is
         // created, and replies issued from inside the loop must use that client.
-        async function loop(client: OpencodeClient, events: Awaited<ReturnType<typeof sdk.event.subscribe>>) {
+        async function loop(
+          client: OpencodeClient,
+          events: Awaited<ReturnType<typeof sdk.event.subscribe>>,
+          onEvent: () => void = () => {},
+        ) {
           const toggles = new Map<string, boolean>()
           const sessions = new Set([sessionID])
           let error: string | undefined
 
           for await (const event of events.stream) {
+            onEvent()
             if (event.type === "session.created" && event.properties.info.parentID) {
               if (sessions.has(event.properties.info.parentID)) sessions.add(event.properties.info.id)
             }
@@ -752,6 +766,7 @@ export const RunCommand = effectCmd({
 
               if (part.type === "text" && part.time?.end) {
                 if (emit("text", { part })) continue
+                written.add(part.id)
                 const text = part.text.trim()
                 if (!text) continue
                 if (!process.stdout.isTTY) {
@@ -795,6 +810,7 @@ export const RunCommand = effectCmd({
               event.properties.sessionID === sessionID &&
               event.properties.status.type === "idle"
             ) {
+              idle = true
               break
             }
 
@@ -831,15 +847,42 @@ export const RunCommand = effectCmd({
         await share(client, sessionID)
 
         if (!interactive) {
-          const events = await client.event.subscribe()
-          const completed = loop(client, events).catch((e) => {
+          const abort = new AbortController()
+          const connected = Promise.withResolvers<void>()
+          const events = await client.event.subscribe(undefined, { signal: abort.signal })
+          const completed = loop(client, events, connected.resolve).catch((e) => {
+            if (abort.signal.aborted) return
             console.error(e)
             process.exitCode = 1
           })
+          // The event stream connects lazily; send the prompt only once it is live so no early event is
+          // lost, but never wait on it forever.
+          await Promise.race([connected.promise, completed, Bun.sleep(EVENT_CONNECT_TIMEOUT_MS)])
+          const started = Date.now()
           async function finish() {
             if (args.attach) return
-            const error = await completed
+            // The prompt has returned, so the session is done: the idle event should follow at once. If the
+            // stream dropped or reconnected past it, stop waiting and write what the stream missed.
+            const error = await Promise.race([completed, Bun.sleep(EVENT_DRAIN_TIMEOUT_MS)])
             if (error) process.exitCode = 1
+            if (idle) return
+            abort.abort()
+            const messages = await client.session
+              .messages({ sessionID })
+              .then((result) => result.data ?? [])
+              .catch(() => [])
+            const parts = messages.flatMap((message) =>
+              message.info.role === "assistant" && message.info.time.created >= started ? message.parts : [],
+            )
+            for (const part of parts) {
+              if (written.has(part.id)) continue
+              if (part.type === "step-start") emit("step_start", { part })
+              if (part.type === "step-finish") emit("step_finish", { part })
+              if (part.type === "tool" && (part.state.status === "completed" || part.state.status === "error"))
+                emit("tool_use", { part })
+              if (part.type === "text" && part.time?.end && !emit("text", { part }) && part.text.trim())
+                process.stdout.write(part.text.trim() + EOL)
+            }
           }
 
           if (args.command) {

@@ -558,3 +558,24 @@ it.live("McpOAuthCallback.cancelPending rejects the pending callback", () =>
     () => Effect.promise(() => McpOAuthCallback.stop()).pipe(Effect.ignore),
   ),
 )
+
+// A remote server that accepts connections and never answers, like an overloaded AgentOS. Started before the
+// instance so its URL can go into the instance config.
+const stalled = Bun.serve({ port: 0, fetch: () => new Promise<Response>(() => {}) })
+process.on("beforeExit", () => stalled.stop(true))
+
+it.instance(
+  "a configured remote server that never answers does not hold up startup past its budget",
+  () =>
+    Effect.gen(function* () {
+      const mcp = yield* MCP.Service
+      const started = Date.now()
+      const status = yield* mcp.status()
+      // Two transports at the 30s per-attempt default would take a minute; the startup budget caps it.
+      expect(Date.now() - started).toBeLessThan(MCP.REMOTE_STARTUP_TIMEOUT + 3_000)
+      expect(status.stalled).toEqual({ status: "failed", error: `Timed out after ${MCP.REMOTE_STARTUP_TIMEOUT}ms` })
+      expect(yield* mcp.tools()).toEqual({})
+    }),
+  { config: () => ({ mcp: { stalled: { type: "remote", url: stalled.url.toString(), oauth: false } } }) },
+  30_000,
+)

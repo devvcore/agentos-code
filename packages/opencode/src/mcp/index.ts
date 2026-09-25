@@ -36,6 +36,9 @@ import { McpEvent } from "@opencode-ai/schema/mcp-event"
 import { McpBrowser } from "./browser"
 
 const DEFAULT_TIMEOUT = 30_000
+// Whole startup budget (both transports plus the tool list) for a remote server without its own timeout.
+// A slow or unreachable remote server must not hold up the session; it starts without that server's tools.
+export const REMOTE_STARTUP_TIMEOUT = 10_000
 const CLIENT_OPTIONS = {
   capabilities: {
     // https://github.com/anomalyco/opencode/issues/11948
@@ -516,7 +519,23 @@ const layer = Layer.effect(
                 return
               }
 
-              const result = yield* create(key, mcp)
+              const startup = mcp.type === "remote" ? (mcp.timeout ?? REMOTE_STARTUP_TIMEOUT) : undefined
+              const result = startup
+                ? yield* create(key, mcp).pipe(
+                    Effect.timeoutOrElse({
+                      duration: startup,
+                      orElse: () =>
+                        Effect.logWarning("server startup timed out, continuing without its tools", {
+                          key,
+                          timeout: startup,
+                        }).pipe(
+                          Effect.as<CreateResult>({
+                            status: { status: "failed", error: `Timed out after ${startup}ms` },
+                          }),
+                        ),
+                    }),
+                  )
+                : yield* create(key, mcp)
               s.status[key] = result.status
               if (result.mcpClient) {
                 s.clients[key] = result.mcpClient

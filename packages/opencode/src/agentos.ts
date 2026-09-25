@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises"
 import { parseArgs } from "node:util"
 import { account, authenticated, credentialPath, loadCredential, SignInRequired } from "./agentos/account"
-import { applySession, isInteractive, requireAccount, signIn } from "./agentos/session"
+import { applySession, isInteractive, requireAccount, savedAccountPath, signIn } from "./agentos/session"
 
 process.env.AGENTOS_CODE = "1"
 const args = process.argv.slice(2)
@@ -47,6 +47,7 @@ try {
       await authenticated(credential, "/access-tokens/" + encodeURIComponent(result.token.id), "DELETE")
     }
     await rm(credentialPath(), { force: true })
+    await rm(savedAccountPath(), { force: true })
     console.log(
       options.values.local
         ? "Local login removed. The token can still be revoked in AgentOS Settings."

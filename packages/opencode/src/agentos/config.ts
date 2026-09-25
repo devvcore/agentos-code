@@ -24,9 +24,12 @@ export const Models = z.object({ data: z.array(z.object({
   input_modalities: z.array(z.string()), output_modalities: z.array(z.string()), supported_parameters: z.array(z.string()),
 })) })
 
-export async function configuration(credential: Credential, model: string) {
-  const catalog = Models.parse(await authenticated(credential, "/inference/v1/models"))
-  const models = catalog.data.filter((entry) => entry.supported_parameters.includes("tools") && entry.output_modalities.includes("text"))
+export async function catalog(credential: Credential, timeout?: number) {
+  return Models.parse(await authenticated(credential, "/inference/v1/models", "GET", timeout))
+}
+
+export async function configuration(credential: Credential, model: string, known?: z.infer<typeof Models>) {
+  const models = (known ?? (await catalog(credential))).data.filter((entry) => entry.supported_parameters.includes("tools") && entry.output_modalities.includes("text"))
   if (!models.some((entry) => entry.id === model)) {
     throw new Error(`The AgentOS model '${model}' is not available for coding. Choose one with AGENTOS_MODEL.`)
   }

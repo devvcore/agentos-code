@@ -7,6 +7,9 @@ import { z } from "zod"
 export const Credential = z.object({ url: z.string(), token: z.string().startsWith("agentos_pat_") })
 export type Credential = z.infer<typeof Credential>
 export class SignInRequired extends Error {}
+// AgentOS did not answer in time, the network failed, or the server errored. Unlike an auth or permission
+// answer, this says nothing about the account, so startup may fall back to the last verified account.
+export class Unavailable extends Error {}
 export const Account = z.object({
   user: z.object({ id: z.string(), name: z.string(), email: z.string() }),
   workspace: z.object({ id: z.string(), name: z.string() }),
@@ -56,8 +59,14 @@ export async function saveCredential(value: Credential, file = credentialPath())
   }
 }
 
-export async function jsonRequest(url: string, init: RequestInit = {}): Promise<unknown> {
-  const response = await fetch(url, { ...init, redirect: "error", signal: init.signal || AbortSignal.timeout(15000) })
+export async function jsonRequest(url: string, init: RequestInit = {}, timeout = 15000): Promise<unknown> {
+  const response = await fetch(url, { ...init, redirect: "error", signal: init.signal || AbortSignal.timeout(timeout) }).catch(
+    (error) => {
+      // A caller's own signal means cancellation, which is not an outage.
+      if (init.signal) throw error
+      throw new Unavailable(`AgentOS did not respond (${error instanceof Error ? error.name : "network error"}).`)
+    },
+  )
   if (!response.ok) {
     // Provider or proxy diagnostics may contain credentials. Only expose a
     // bounded status; a model request is never replayed by this client.
@@ -65,17 +74,18 @@ export async function jsonRequest(url: string, init: RequestInit = {}): Promise<
     if (response.status === 402) throw new Error("Your AgentOS workspace is out of credits. Open Usage in AgentOS.")
     if (response.status === 403) throw new Error("Your AgentOS account does not have permission for this action.")
     if (response.status === 404) throw new Error("This AgentOS server needs the OmniCode API update.")
+    if (response.status >= 500) throw new Unavailable(`AgentOS request failed (HTTP ${response.status}).`)
     throw new Error(`AgentOS request failed (HTTP ${response.status}).`)
   }
   return response.json()
 }
 
-export function authenticated(value: Credential, endpoint: string, method = "GET") {
-  return jsonRequest(value.url + endpoint, { method, headers: { Authorization: "Bearer " + value.token } })
+export function authenticated(value: Credential, endpoint: string, method = "GET", timeout?: number) {
+  return jsonRequest(value.url + endpoint, { method, headers: { Authorization: "Bearer " + value.token } }, timeout)
 }
 
-export async function account(value: Credential) {
-  return Account.parse(await authenticated(value, "/inference/v1/account"))
+export async function account(value: Credential, timeout?: number) {
+  return Account.parse(await authenticated(value, "/inference/v1/account", "GET", timeout))
 }
 
 const Metadata = z.object({

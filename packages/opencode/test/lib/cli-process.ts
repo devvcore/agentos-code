@@ -101,6 +101,8 @@ export type RunOpts = SpawnOpts & {
   readonly printLogs?: boolean
   readonly permission?: Record<string, "ask" | "allow" | "deny">
   readonly extraArgs?: string[]
+  // startRun only. "pipe" hands the child a stdin pipe that stays open and silent, like an agent harness.
+  readonly stdin?: "ignore" | "pipe"
 }
 
 // `opencode serve` is a long-lived process — it never exits on its own.
@@ -286,7 +288,7 @@ export function withCliFixture<A, E>(
           Bun.spawn(["bun", "run", cliEntry, ...runArgs(message, opts)], {
             cwd: home,
             env: { ...process.env, ...env, ...options?.env },
-            stdin: "ignore",
+            stdin: opts?.stdin ?? "ignore",
             stdout: "pipe",
             stderr: "pipe",
           }),

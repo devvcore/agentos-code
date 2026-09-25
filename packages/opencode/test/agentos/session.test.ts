@@ -162,6 +162,27 @@ test("invalid external tokens and server outages do not silently switch accounts
   }
 })
 
+test("an AgentOS outage starts from the last verified account for the same login only", async () => {
+  const healthy = server()
+  const origin = healthy.instance.url.origin
+  await saveCredential({ url: origin, token: "agentos_pat_saved" })
+  const verified = await requireAccount({ interactive: false, open: healthy.open }).finally(() =>
+    healthy.instance.stop(true),
+  )
+  const port = Number(new URL(origin).port)
+  const down = Bun.serve({ hostname: "127.0.0.1", port, fetch: () => new Response(null, { status: 503 }) })
+  try {
+    const result = await requireAccount({ interactive: false, open: healthy.open })
+    expect(result.details).toEqual(verified.details)
+    expect(result.config).toBe(verified.config)
+    // Another login never inherits the saved account.
+    await saveCredential({ url: origin, token: "agentos_pat_other" })
+    await expect(requireAccount({ interactive: false, open: healthy.open })).rejects.toThrow("503")
+  } finally {
+    await down.stop(true)
+  }
+})
+
 test("failed catalog verification preserves the previous account", async () => {
   const fixture = server({ badCatalog: true })
   try {
